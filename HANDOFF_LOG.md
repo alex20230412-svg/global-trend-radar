@@ -4,6 +4,14 @@
 
 ---
 
+## 2026-11-25 · ChatGPT · PR #5 文档复核修正
+
+- Owner 转达 Claude 审核发现；核对原分支文件及 Issue #2 后确认：DECISIONS.md、STATUS.md 表格被空行截断，STATUS.md 沿用旧 VERIFIED 数量，D-008 引用未区分 Owner 原话与 AI 代录。
+- 修正表格连续性、如实注明旧口径与拟议 L4 口径（0 个达到 L4）、注明 Owner 原话及代录/确认出处。旧来源证据表保留待批准更新，不擅自批准新标准。
+- 仅修正文档；方向、授权、费用与 WAIT_OWNER 状态不变。
+
+---
+
 ## 2026-11-25 · ChatGPT · Owner 方向决定
 
 - 已在 [Issue #4](https://github.com/alex20230412-svg/global-trend-radar/issues/4#issuecomment-7167038713) 代录 Owner 原话；确认不限行业、优先自动化商机、暂时私人使用、手动触发收集。

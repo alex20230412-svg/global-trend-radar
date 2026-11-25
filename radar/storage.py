@@ -24,6 +24,14 @@ STORE_ROOTS = {"observations", "manifests", "runs", "reports", "deliveries", "he
 class StorageError(Exception):
     """Fixed error codes only, suitable for the public Actions log."""
 
+    def __init__(self, code, *, http_status=None):
+        super().__init__(code)
+        self.http_status = http_status
+
+
+class PublicationError(StorageError):
+    """The local clone may be ahead of the remote; abandon it for this run."""
+
 
 def json_bytes(value):
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()
@@ -40,7 +48,7 @@ def github_object(path, token):
                 headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
             ) as response:
                 if response.status_code != 200:
-                    raise StorageError("github_access_rejected")
+                    raise StorageError("github_access_rejected", http_status=response.status_code)
                 raw = bytearray()
                 for chunk in response.iter_bytes(8192):
                     raw.extend(chunk)
@@ -101,7 +109,7 @@ class PrivateGitStore:
         size = private_repository_size(token)
         root = Path(parent) / "private-data"
         git_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
-        for key in ("DATA_REPO_TOKEN", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "RUN_METADATA_TOKEN"):
+        for key in ("DATA_REPO_TOKEN", "TELEGRAM_BOT_TOKEN", "RUN_METADATA_TOKEN"):
             git_env.pop(key, None)
         credential = base64.b64encode(f"x-access-token:{token}".encode()).decode()
         git_env.update({
@@ -137,6 +145,14 @@ class PrivateGitStore:
             return None
 
     def publish(self, files, message):
+        try:
+            self._publish(files, message)
+        except StorageError as exc:
+            raise PublicationError(str(exc), http_status=exc.http_status) from exc
+        except OSError as exc:
+            raise PublicationError("git_publication_failed") from exc
+
+    def _publish(self, files, message):
         _write_files(self._path, files)
         if not files:
             return

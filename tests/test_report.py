@@ -170,6 +170,27 @@ class RankingTests(unittest.TestCase):
 
 
 class ReportTests(unittest.TestCase):
+    def test_trend_background_is_escaped_and_only_in_display_projection(self):
+        result = report([observed("New shopping festival")])
+        baseline_snapshot = json.dumps(result.snapshot)
+        baseline_markdown = result.markdown
+        baseline_blocks = list(result.blocks)
+        self.assertEqual(baseline_blocks, result.display_blocks())
+
+        display = result.display_blocks({
+            " NEW   shopping festival ": ("Early plans & <sale>", "Synthetic <Daily>"),
+            "Unranked topic": ("Unlisted headline", "Synthetic Daily"),
+        })
+        rendered = "\n".join(block.html for block in display)
+        self.assertEqual(1, rendered.count("Early plans &amp; &lt;sale&gt;"))
+        self.assertIn("Synthetic &lt;Daily&gt;", rendered)
+        self.assertIn("仅当次展示", rendered)
+        self.assertNotIn("Unlisted headline", rendered)
+        self.assertEqual(baseline_snapshot, json.dumps(result.snapshot))
+        self.assertEqual(baseline_markdown, result.markdown)
+        self.assertEqual(baseline_blocks, result.blocks)
+        self.assertNotIn("Early plans", result.markdown)
+
     def test_render_links_and_escape_external_text_for_telegram(self):
         result = report([observed(
             '新商品 & <b>引号"</b> 👩‍💻', language="zh",

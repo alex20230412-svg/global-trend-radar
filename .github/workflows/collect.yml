@@ -48,5 +48,4 @@ jobs:
           RUN_METADATA_TOKEN: ${{ github.token }}
           DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python -m radar.live collect

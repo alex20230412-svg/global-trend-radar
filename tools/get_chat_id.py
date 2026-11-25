@@ -54,7 +54,7 @@ def main() -> int:
         if len(ids) != 1:
             print("No unique private chat matched the probe. Verify the message and try again.", file=sys.stderr)
             return 1
-        print(f"TELEGRAM_CHAT_ID for your GitHub Secret: {ids.pop()}")
+        print(f"Private Chat ID for local diagnosis only: {ids.pop()}")
         return 0
     except (EOFError, KeyboardInterrupt, GetPassWarning):
         print("Chat ID setup stopped.", file=sys.stderr)

@@ -4,6 +4,16 @@
 
 ---
 
+## 2026-11-26 · Codex · PR #7 第一轮审核修订
+
+- 同一分支修正来源审批、词条链接、坏条目容错、跨小时迟到和私有诊断。保留原来的批准范围，天气以外的来源仍为待核准。
+- PR 只触发无凭证的 Linux 离线检查。真实工作流保留默认分支环境和两道批准关口。浏览器绑定仅需两个 Secret，并要求 Owner 看到私聊的通用消息才确认。完整步骤见 [运行手册](docs/operations.md)。
+- 本地 94 项离线测试通过，另通过依赖一致性、编译和差异检查。Linux 运行、V1–V9 结果及 `python -m tools.sample_report` 生成的整份两段合成日报见 [PR #7](https://github.com/alex20230412-svg/global-trend-radar/pull/7)。
+- V3 使用审核留言公开的 HN 原文规则、两站延迟值和历史结果重建样本。由于留言未附九份完整 robots 文件，没有用实时站点补取。P2 的可选新闻标题/媒体名展示已做离线投影，真实接入需 Owner 单独核准。
+- PR #5 尚未合并，继续以其修订分支为基线。真实来源、Secret、cron 与合并均未触发。当前 WAIT_OWNER。 [Claude 审核](https://github.com/alex20230412-svg/global-trend-radar/pull/7#issuecomment-7168526931)
+
+---
+
 ## 2026-11-26 · Codex · 第一轮阶段 A
 
 - Owner 明确批准 Issue #6 审核后的离线开发。完整读取项目记录、方案、Issue #6 与 PR #5 修订。分支 `codex/phase-a-trend-collection` 以 PR #5 的 `docs/owner-direction-20261125` 最新提交 `a54ac7704febde6df2068ab95d7393db8eac759a` 为基线，支持独立评审第一轮差异。

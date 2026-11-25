@@ -42,6 +42,29 @@ class Report:
     def markdown(self):
         return "\n\n".join(block.html for block in self.blocks) + "\n"
 
+    def display_blocks(self, trend_background=None):
+        """Project transient topic headlines onto a copy of the stored report."""
+        if not trend_background:
+            return list(self.blocks)
+        background = {trend_key(topic): first_item for topic, first_item in trend_background.items()}
+        seen = set()
+        lines = []
+        for section in ("malaysia", "monitored_regions", "new", "rising"):
+            for entry in self.snapshot[section]:
+                topic = entry["title"]
+                key = trend_key(topic)
+                if key in seen or key not in background:
+                    continue
+                seen.add(key)
+                title, publisher = background[key]
+                title, publisher = _display(title or "", 140), _display(publisher or "", 48)
+                if title and publisher:
+                    lines.append(_line(f"{_display(topic, 80)} · {title} · {publisher}"))
+        if not lines:
+            return list(self.blocks)
+        heading = _line("为什么热 · Google Trends 关联报道（仅当次展示）", heading=True)
+        return [*self.blocks, heading, *lines]
+
 
 def _display(value, limit=200):
     text = "".join(

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: Send, resume, or record the Owner's check of an uncertain part
+        description: Bind the private chat, send or resume a report, or reconcile a delivery
         type: choice
         default: send
         options:
@@ -12,6 +12,8 @@ on:
           - resume
           - confirm_received
           - confirm_unsent
+          - bind_chat
+          - confirm_bind
       report_id:
         description: Date-based report ID or hourly alert ID for recovery
         type: string
@@ -64,7 +66,6 @@ jobs:
           RUN_METADATA_TOKEN: ${{ github.token }}
           DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           RADAR_REPORT_ACTION: ${{ inputs.action }}
           RADAR_REPORT_ID: ${{ inputs.report_id }}
           RADAR_PART_NO: ${{ inputs.part_no }}

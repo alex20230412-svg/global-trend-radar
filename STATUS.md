@@ -4,7 +4,15 @@
 
 ## 当前阶段 A · WAIT_OWNER
 
-根据 D-009 开发和离线验收。交付分支为 `codex/phase-a-trend-collection`，基于未合并的 PR #5 最新修订 `a54ac7704febde6df2068ab95d7393db8eac759a`。新 Draft PR 以 PR #5 的分支为基线，保留 D-005 至 D-008。等待 Claude 独立审核及 Owner 单独批准阶段 B。 [PR #5](https://github.com/alex20230412-svg/global-trend-radar/pull/5) · [Issue #6 正式审核](https://github.com/alex20230412-svg/global-trend-radar/issues/6#issuecomment-7167409077)
+根据 D-009 开发和离线验收。第一轮 Claude 审核修正在原分支 `codex/phase-a-trend-collection` 交付。PR #5 尚未合并，PR #7 继续以其最新修订 `a54ac7704febde6df2068ab95d7393db8eac759a` 为基线。等待 Owner 决定是否复审及是否单独批准阶段 B。 [PR #5](https://github.com/alex20230412-svg/global-trend-radar/pull/5) · [PR #7 审核及验收](https://github.com/alex20230412-svg/global-trend-radar/pull/7#issuecomment-7168526931)
+
+## 审核修订
+
+- 来源默认以审核后的 `enabled` 和 `long_term` 为准，可用可选名单缩小范围。已把未来审批步骤收敛为只改批准条目的 `retention`。本轮批准前只有天气具备归档资格。
+- Trends 链接按地区和词生成。跳过坏条目并保存计数，超过半数坏项时来源失败。跨小时迟到触发采进实际小时，计划槽和延迟写入私有审计。
+- 公开日志只显示状态。私有审计记录异常类名、模块、行号及适用的来源 ID 和 HTTP 状态。浏览器绑定保留两个 Secret，先向唯一候选私聊发送通用消息，再由 Owner 确认。
+- Linux PR 测试仅用合成样本与 Mock，检查锁定 wheel 安装，不读取 Secrets 或 Environment。V3 根据审核公开的 HN 原文规则片段、延迟值和历史结论建模。审核留言缺九份完整原文，证据范围限于重建 fixture。P2 临时相关新闻投影已通过离线验证，生产接入等待单独批准。
+- 修订后本地 Windows Python 3.14.4 套件 94 项通过。V1–V9 的逐项证据、Linux Actions 运行和完整的两段合成日报见 PR #7。 [Draft PR #7](https://github.com/alex20230412-svg/global-trend-radar/pull/7)
 
 | 已交付 | 阶段 A 证据 |
 | --- | --- |
@@ -12,7 +20,7 @@
 | 内容去重、跨小时真实观测、同槽只补失败来源、校验和、源失败与漏跑记录 | 离线流水、校验拒绝和临时本地 Git 写入竞争验证。 |
 | MY 热门、监测地区、NEW 与 RISING、商品消费和 AI 科技、社交平台与气象 | 中文模板、原文语言、分级覆盖与 MYT 离线验证。 |
 | Telegram 私聊、完整条目分段、逐段落盘、429 及 UNKNOWN 恢复 | 离线模拟 API 和中断，未配置凭证或发送真实消息。 |
-| 08:30 MYT 日报与每小时采集的工作流、私有健康记录 | 已测试 YAML 门禁、共享队列和默认无 cron。真实 Actions 尚待批准后验证。 |
+| 08:30 MYT 日报与每小时采集的工作流、私有健康记录 | 已测试 YAML 门禁、共享队列和默认无 cron。带真实数据或投递的 Actions 尚待批准后验证。 |
 
 ## 实际离线结果
 
@@ -23,7 +31,7 @@
 git diff --check
 ```
 
-Windows x64 本地 Python 3.14.4 的最终离线套件 73 项通过，约 1.85 秒。依赖一致性、编译与差异检查通过。13 个版本及 wheel 哈希固定。查询各锁定发行版时，PyPI JSON 中未返回生效漏洞公告。全部来源样本为合成或 Mock，实测来源仍为 L4 0 个、L5 0 个。阶段 A 新增费用 RM0。
+修订前初次阶段 A 交付为 73 项。修订后 94 项通过，约 1.91 秒，依赖一致性、编译与差异检查通过。13 个版本及 wheel 哈希固定，初次核对 PyPI 发行元数据时未返回生效漏洞公告。来源样本为合成或 Mock，实测来源仍为 L4 0 个、L5 0 个。阶段 A 新增费用 RM0。
 
 ## 阶段 B 和 C 待办
 

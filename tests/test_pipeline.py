@@ -3,6 +3,7 @@
 from collections import Counter
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from io import StringIO
 import os
 from pathlib import Path
@@ -112,6 +113,42 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(missed, [pipeline.hour(BASE).isoformat()])
         self.assertEqual(health["states_7d"], {"ok": 0, "partial": 0, "failed": 0, "missed": 1})
 
+    def test_late_scheduled_collection_uses_current_hour_and_preserves_plan(self):
+        created = BASE.replace(hour=10, minute=17)
+        now = BASE.replace(hour=11, minute=5)
+        collect = partial(pipeline.collect_slot, fetch=lambda _: [item()], clock=lambda: now)
+        with patch.object(live, "collect_slot", side_effect=collect), redirect_stdout(StringIO()):
+            result = live._collection(
+                self.store, [self.my], {self.my.id}, {"GITHUB_EVENT_NAME": "schedule"}, "collect-7-1", created, now,
+            )
+        self.assertEqual(result, 0)
+        self.assertIsNone(pipeline.load_manifest(self.store, created))
+        actual = pipeline.load_manifest(self.store, now)
+        self.assertEqual(actual["row_count"], 1)
+        self.assertIsNone(actual["planned_at"])
+        audit = storage.read_json(self.store, "runs/collect-7-1.json")
+        self.assertEqual(audit["planned_at"], created.isoformat())
+        self.assertEqual(audit["planned_slot"], pipeline.hour(created).isoformat())
+        self.assertEqual(audit["slot"], pipeline.hour(now).isoformat())
+        self.assertEqual(audit["delay_seconds"], 48 * 60)
+        self.assertTrue(audit["late_to_next_slot"])
+        rows = storage.read_observations(self.store, pipeline.partition(now), actual)
+        self.assertEqual(rows[0]["observed_at"], now.isoformat())
+
+    def test_source_failure_has_safe_http_and_source_diagnostic(self):
+        def fetch(source):
+            if source == self.sg:
+                raise SourceError("http_private_response", http_status=429)
+            return [item()]
+
+        self.collect(BASE, "collect-8-1", fetch)
+        audit = storage.read_json(self.store, "runs/collect-8-1.json")
+        [diagnostic] = audit["diagnostics"]
+        self.assertEqual(diagnostic["source_id"], self.sg.id)
+        self.assertEqual(diagnostic["http_status"], 429)
+        self.assertEqual(diagnostic["module"], "radar.pipeline")
+        self.assertNotIn(b"private_response", self.store.read("runs/collect-8-1.json"))
+
     def test_bad_checksum_does_not_overwrite_existing_hour(self):
         self.collect(BASE, "collect-1-1", lambda _: [item()])
         self.store.files["observations/2026/01/01/00.jsonl.gz"] = b"corrupted"
@@ -140,7 +177,8 @@ class IsolationTests(unittest.TestCase):
             with self.subTest(workflow=name):
                 workflow = (root / f"{name}.yml").read_text(encoding="utf-8")
                 spec = yaml.load(workflow, Loader=yaml.BaseLoader)
-                self.assertEqual(set(spec["on"]), {"workflow_dispatch"})
+                self.assertEqual(set(spec["on"]), {"workflow_dispatch"} if cron else
+                                 {"workflow_dispatch", "pull_request"})
                 job = next(iter(spec["jobs"].values()))
                 self.assertEqual(job["runs-on"], "ubuntu-24.04")
                 self.assertEqual(job["timeout-minutes"], "8")
@@ -152,14 +190,25 @@ class IsolationTests(unittest.TestCase):
                     self.assertEqual(job["concurrency"], {"group": "radar-private-writer",
                                                           "queue": "max", "cancel-in-progress": "false"})
                     self.assertIn("refs/heads/main", job["if"])
+                    self.assertEqual(job["environment"], "radar-live")
+                    self.assertNotIn("secrets.TELEGRAM_CHAT_ID", workflow)
                 else:
                     self.assertNotIn("secrets.", workflow)
                     self.assertNotIn("radar.live", workflow)
+                    self.assertNotIn("environment", job)
+                    self.assertEqual(spec["permissions"], {"contents": "read"})
 
     def test_unapproved_sources_fail_closed(self):
         sources = load_sources()
+        self.assertEqual(live._approved_sources(sources), {"weather"})
         self.assertEqual(live._approved_sources(sources, "weather"), {"weather"})
-        for candidate in ("", "trends_my", "weather other_source", "gdelt"):
+        reviewed = [
+            Source("trends_my", "trends", "MY", "und", "https://example.org", True, "long_term"),
+            *sources,
+        ]
+        self.assertEqual(live._approved_sources(reviewed), {"weather", "trends_my"})
+        self.assertEqual(live._approved_sources(reviewed, "trends_my"), {"trends_my"})
+        for candidate in ("trends_my", "weather other_source", "gdelt"):
             with self.subTest(candidate=candidate), self.assertRaises(storage.StorageError):
                 live._approved_sources(sources, candidate)
 
@@ -168,6 +217,54 @@ class IsolationTests(unittest.TestCase):
         with patch.object(live, "run_live", side_effect=ValueError("PRIVATE EXCEPTION BODY")), redirect_stdout(output):
             self.assertEqual(live.main(["report"], {}), 1)
         self.assertEqual(output.getvalue(), "radar outcome=operation_failed\n")
+
+    @staticmethod
+    def report_env():
+        return {
+            "GITHUB_REPOSITORY": storage.CODE_REPO, "GITHUB_REF": "refs/heads/main",
+            "GITHUB_WORKFLOW_REF": f"{storage.CODE_REPO}/.github/workflows/report.yml@refs/heads/main",
+            "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_ACTIONS": "true", "RADAR_STAGE": "b-manual",
+            "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1",
+            "GITHUB_ACTOR": "alex20230412-svg", "GITHUB_TRIGGERING_ACTOR": "alex20230412-svg",
+        }
+
+    def test_unexpected_failure_stdout_and_private_audit_only_allow_safe_fields(self):
+        store, output = MemoryStore(), StringIO()
+        sensitive = ["123456789:" + "A" * 35, "https://example.test/private?q=probe", "PRIVATE RESPONSE BODY"]
+        failure = RuntimeError(" ".join(sensitive))
+        failure.http_status = 503
+        with (patch.object(live, "queued_at", return_value=BASE),
+              patch.object(storage.PrivateGitStore, "clone", return_value=store),
+              patch.object(live, "_report", side_effect=failure), redirect_stdout(output)):
+            self.assertEqual(live.main(["report"], self.report_env()), 1)
+        self.assertEqual(output.getvalue(), "radar outcome=operation_failed\n")
+        key = "runs/report-123-1.json"
+        audit = storage.read_json(store, key)
+        self.assertEqual(audit["outcome"], "operation_failed")
+        diagnostic = audit["failure_diagnostic"]
+        self.assertEqual(diagnostic["exception_class"], "RuntimeError")
+        self.assertEqual(diagnostic["module"], "radar.live")
+        self.assertGreater(diagnostic["line"], 0)
+        self.assertIsNone(diagnostic["source_id"])
+        self.assertEqual(diagnostic["http_status"], 503)
+        for text in sensitive:
+            self.assertNotIn(text.encode(), store.read(key))
+            self.assertNotIn(text, output.getvalue())
+
+    def test_binding_is_owner_only_and_independent_from_source_approval(self):
+        env = {**self.report_env(), "RADAR_REPORT_ACTION": "confirm_bind"}
+        with patch.object(live, "queued_at") as metadata:
+            with self.assertRaisesRegex(storage.StorageError, "binding_owner_required"):
+                live.run_live("report", {**env, "GITHUB_TRIGGERING_ACTOR": "other-user"})
+            metadata.assert_not_called()
+        store = MemoryStore()
+        with (patch.object(live, "queued_at", return_value=BASE),
+              patch.object(storage.PrivateGitStore, "clone", return_value=store),
+              patch.object(live, "load_sources", side_effect=AssertionError("binding read source policy")),
+              patch.object(live, "confirm_bind", return_value="BOUND") as confirm,
+              redirect_stdout(StringIO())):
+            self.assertEqual(live.run_live("report", env), 0)
+        confirm.assert_called_once_with(store, "", requested_at=BASE.timestamp())
 
     def test_repository_must_be_exact_private_main(self):
         repo = {"full_name": storage.DATA_REPO, "private": True, "visibility": "private",

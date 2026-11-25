@@ -32,10 +32,12 @@ HOSTS = frozenset({
 class SourceError(Exception):
     """An error that can be recorded without disclosing upstream text."""
 
-    def __init__(self, code, retry_after=None):
+    def __init__(self, code, retry_after=None, *, http_status=None, skipped=0):
         super().__init__(code)
         self.code = code
         self.retry_after = retry_after
+        self.http_status = http_status if type(http_status) is int and 100 <= http_status <= 599 else None
+        self.skipped = skipped
 
 
 @dataclass
@@ -83,10 +85,11 @@ def _retry_after(raw):
 class SourceHttp:
     """Use a separate client for each source to isolate cookies and TLS connections."""
 
-    def __init__(self, client, resolver=public_address, sleep=time.sleep, origins=None):
+    def __init__(self, client, resolver=public_address, sleep=time.sleep, origins=None, clock=time.monotonic):
         self.client = client
         self.resolve = resolver
         self.sleep = sleep
+        self.clock = clock
         self.addresses = {}
         self.origins = ORIGINS if origins is None else origins
 
@@ -143,10 +146,10 @@ class SourceHttp:
 
     def _request(self, target, gate, interval):
         for attempt in range(2):
-            delay = gate.last_request + interval - time.monotonic()
+            delay = gate.last_request + interval - self.clock()
             if delay > 0:
                 self.sleep(delay)
-            gate.last_request = time.monotonic()
+            gate.last_request = self.clock()
             try:
                 return self._read(target)
             except SourceError as error:
@@ -168,7 +171,7 @@ class SourceHttp:
         # verification against the named origin. Payload URLs never enter this path.
         address = self.addresses[target.host]
         url = target.copy_with(host=address)
-        deadline = time.monotonic() + 12
+        deadline = self.clock() + 12
         try:
             with self.client.stream(
                 "GET", url,
@@ -180,13 +183,14 @@ class SourceHttp:
                     raise SourceError(
                         f"http_{response.status_code}",
                         _retry_after(response.headers.get("Retry-After", "")),
+                        http_status=response.status_code,
                     )
                 encoding = response.headers.get("Content-Encoding", "identity")
                 if encoding.lower() != "identity":
                     raise SourceError("response_encoding")
                 body = bytearray()
                 for chunk in response.iter_raw():
-                    if time.monotonic() > deadline:
+                    if self.clock() > deadline:
                         raise SourceError("network_error")
                     if len(body) + len(chunk) > MAX_BODY:
                         raise SourceError("response_too_large")

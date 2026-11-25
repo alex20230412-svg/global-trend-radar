@@ -11,7 +11,7 @@ from email.utils import parsedate_to_datetime
 from hashlib import sha256
 from ipaddress import ip_address
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, quote_plus, urlencode, urlsplit, urlunsplit
 from xml.etree.ElementTree import ParseError
 
 import feedparser
@@ -58,6 +58,18 @@ class Source:
     enabled: bool = True
     retention: str = "pending"
     retain_related: bool = False
+
+
+class SourceItems(list):
+    """Usable observations plus the number of malformed input items."""
+
+    def __init__(self, rows=(), *, skipped=0):
+        super().__init__(rows)
+        self.skipped = skipped
+
+
+class MalformedItem(SourceError):
+    """One item failed validation without invalidating the source envelope."""
 
 
 def load_sources(path=None):
@@ -137,7 +149,10 @@ def clean_url(value, *, keep_fragment=False):
             and not key.lower().startswith(("utm_", "x-amz-", "x-goog-"))
         ]
         fragment = url.fragment if keep_fragment else ""
-        return urlunsplit((url.scheme.lower(), host, url.path or "/", urlencode(params), fragment))
+        quote_query = quote if host == "trends.google.com" and url.path == "/trends/explore" else quote_plus
+        return urlunsplit((
+            url.scheme.lower(), host, url.path or "/", urlencode(params, quote_via=quote_query), fragment,
+        ))
     except (UnicodeError, ValueError):
         return None
 
@@ -185,7 +200,7 @@ def _observation(
     title = _title(title)
     url = clean_url(url, keep_fragment=source.kind == "trends")
     if not title or not url:
-        raise SourceError("malformed_item")
+        raise MalformedItem("malformed_item")
     content_id = sha256((identity or url).encode("utf-8")).hexdigest()
     return {
         "source_id": source.id,
@@ -222,36 +237,58 @@ def _ht_text(node, name):
     return element.text if element is not None else None
 
 
+def _item_rows(items, parse_item):
+    rows = []
+    skipped = 0
+    last_error = None
+    for rank, item in enumerate(items, 1):
+        try:
+            row = parse_item(rank, item)
+        except MalformedItem as exc:
+            skipped += 1
+            last_error = exc
+            continue
+        if row is not None:
+            rows.append(row)
+    if skipped * 2 > len(items):
+        raise SourceError("too_many_malformed_items", skipped=skipped) from last_error
+    return SourceItems(rows, skipped=skipped)
+
+
 def _trends(source, body):
     channel = _xml(body).find("channel")
     if channel is None or not channel.findtext("title"):
         raise SourceError("feed_schema")
-    for rank, item in enumerate(channel.findall("item")[:100], 1):
-        title = _title(item.findtext("title"))
-        volume = _title(_ht_text(item, "approx_traffic"), 32)
-        published = _iso(item.findtext("pubDate"))
-        if not volume or not published:
-            raise SourceError("trend_schema")
-        related = []
-        if source.retain_related:
-            for child in item:
-                if not any(child.tag == f"{{{ns}}}news_item" for ns in HT_NAMESPACES):
-                    continue
-                url = clean_url(_ht_text(child, "news_item_url"))
-                if not url:
-                    continue
-                related.append({
-                    "title": _title(_ht_text(child, "news_item_title")),
-                    "url": url,
-                    "publisher": _title(_ht_text(child, "news_item_source"), 100),
-                })
-                if len(related) == 3:
-                    break
-        yield _observation(
-            source, title, item.findtext("link"), rank, volume_raw=volume,
-            published_at=published, related=related,
-            identity=unicodedata.normalize("NFKC", title).casefold(),
-        )
+    return _item_rows(channel.findall("item")[:100], lambda rank, item: _trend_item(source, rank, item))
+
+
+def _trend_item(source, rank, item):
+    title = _title(item.findtext("title"))
+    volume = _title(_ht_text(item, "approx_traffic"), 32)
+    published = _iso(item.findtext("pubDate"))
+    if not volume or not published:
+        raise MalformedItem("trend_schema")
+    related = []
+    if source.retain_related:
+        for child in item:
+            if not any(child.tag == f"{{{ns}}}news_item" for ns in HT_NAMESPACES):
+                continue
+            url = clean_url(_ht_text(child, "news_item_url"))
+            if not url:
+                continue
+            related.append({
+                "title": _title(_ht_text(child, "news_item_title")),
+                "url": url,
+                "publisher": _title(_ht_text(child, "news_item_source"), 100),
+            })
+            if len(related) == 3:
+                break
+    query = urlencode({"geo": source.geo, "q": title}, quote_via=quote)
+    return _observation(
+        source, title, f"https://trends.google.com/trends/explore?{query}", rank, volume_raw=volume,
+        published_at=published, related=related,
+        identity=unicodedata.normalize("NFKC", title).casefold(),
+    )
 
 
 def _news(source, body):
@@ -261,7 +298,8 @@ def _news(source, body):
     feed = feedparser.parse(body)
     if not feed.version or not feed.feed.get("title") or feed.bozo:
         raise SourceError("feed_schema")
-    for entry in feed.entries[:100]:
+
+    def parse_item(_rank, entry):
         date = entry.get("published_parsed") or entry.get("updated_parsed")
         published_at = datetime.fromtimestamp(timegm(date), UTC).isoformat() if date else None
         language = entry.get("language") or feed.feed.get("language")
@@ -279,7 +317,9 @@ def _news(source, body):
         publisher = entry.get("source")
         if isinstance(publisher, dict) and _title(publisher.get("title"), 100):
             row["publisher"] = _title(publisher["title"], 100)
-        yield row
+        return row
+
+    return _item_rows(feed.entries[:100], parse_item)
 
 
 def _bernama_title(title):
@@ -308,6 +348,12 @@ def _object(value):
     return value
 
 
+def _item_object(value):
+    if not isinstance(value, dict):
+        raise MalformedItem("json_item_schema")
+    return value
+
+
 def _json(body):
     try:
         return json.loads(body)
@@ -318,24 +364,29 @@ def _json(body):
 def _hn(source, body, get):
     deadline = time.monotonic() + 100
     seen = set()
-    for rank, item_id in enumerate(_list(_json(body))[:30], 1):
+
+    def parse_item(rank, item_id):
         if type(item_id) is not int or not 0 < item_id <= 999_999_999_999:
-            raise SourceError("json_schema")
+            raise MalformedItem("hn_item_schema")
         if item_id in seen:
-            continue
+            return None
         seen.add(item_id)
         if time.monotonic() > deadline:
             raise SourceError("source_deadline")
         try:
-            item = _object(_json(get(f"https://hacker-news.firebaseio.com/v0/item/{item_id}.json")))
+            raw = get(f"https://hacker-news.firebaseio.com/v0/item/{item_id}.json")
         except SourceError as error:
-            # Catch safe failures from the item request. The source can be retried
-            # in the same slot without recording a partial list as complete.
-            raise SourceError(f"hn_item_{error.code}", error.retry_after) from None
+            # An unsuccessful request is retriable for the source, even if the story
+            # metadata for other items was valid.
+            raise SourceError(f"hn_item_{error.code}", error.retry_after, http_status=error.http_status) from error
+        try:
+            item = _item_object(_json(raw))
+        except SourceError as error:
+            raise MalformedItem("hn_item_schema") from error
         if item.get("deleted") or item.get("dead") or item.get("type") == "job":
-            continue
+            return None
         if item.get("id") != item_id or item.get("type") != "story":
-            raise SourceError("hn_item_schema")
+            raise MalformedItem("hn_item_schema")
         story_url = clean_url(item.get("url")) or f"https://news.ycombinator.com/item?id={item_id}"
         item_time = item.get("time")
         published_at = (
@@ -343,17 +394,20 @@ def _hn(source, body, get):
             if type(item_time) is int and 0 <= item_time < 4_102_444_800 else None
         )
         score = item.get("score")
-        yield _observation(
+        return _observation(
             source, item.get("title"), story_url, rank,
             volume_raw=str(score) if type(score) is int and 0 <= score < 1_000_000_000 else None,
             published_at=published_at, identity=str(item_id),
         )
 
+    return _item_rows(_list(_json(body))[:30], parse_item)
+
 
 def _bluesky(source, body):
     payload = _object(_json(body))
-    for rank, raw in enumerate(_list(payload.get("topics"))[:10], 1):
-        item = _object(raw)
+
+    def parse_item(rank, raw):
+        item = _item_object(raw)
         title = _title(item.get("displayName") or item.get("topic"))
         url = item.get("link")
         if isinstance(url, str) and url.startswith(("/search?", "/profile/")):
@@ -361,42 +415,50 @@ def _bluesky(source, body):
         url = clean_url(url)
         if not url or urlsplit(url).hostname != "bsky.app":
             url = f"https://bsky.app/search?{urlencode({'q': title})}"
-        yield _observation(source, title, url, rank, identity=title.casefold())
+        return _observation(source, title, url, rank, identity=title.casefold())
+
+    return _item_rows(_list(payload.get("topics"))[:10], parse_item)
 
 
 def _mastodon(source, body):
     tags = source.id == "mastodon_tags"
-    for rank, raw in enumerate(_list(_json(body))[:10], 1):
-        item = _object(raw)
+
+    def parse_item(rank, raw):
+        item = _item_object(raw)
         title = _title(item.get("name" if tags else "title"))
         url = item.get("url")
         if tags and title:
             title = "#" + title.lstrip("#")
             if clean_url(url) is None or urlsplit(url).hostname != "mastodon.social":
-                raise SourceError("mastodon_tag_link")
+                raise MalformedItem("mastodon_tag_link")
         # Daily server counts may reset across midnight. Preserve the source's
         # rank here and avoid presenting a day's counts as an hourly metric.
-        yield _observation(source, title, url, rank)
+        return _observation(source, title, url, rank)
+
+    return _item_rows(_list(_json(body))[:10], parse_item)
 
 
 def _weather(source, body):
     malaysia = timezone(timedelta(hours=8))
-    for raw in _list(_json(body))[:50]:
-        item = _object(raw)
-        issue = _object(item.get("warning_issue"))
+
+    def parse_item(_rank, raw):
+        item = _item_object(raw)
+        issue = _item_object(item.get("warning_issue"))
         english = _title(item.get("heading_en") or issue.get("title_en"))
         title = english or _title(item.get("heading_bm") or issue.get("title_bm"))
         issued = _iso(issue.get("issued"), malaysia)
         start = _iso(item.get("valid_from"), malaysia)
         end = _iso(item.get("valid_to"), malaysia)
         if not issued or not start or not end or end < start:
-            raise SourceError("weather_schema")
+            raise MalformedItem("weather_schema")
         if datetime.fromisoformat(end) <= datetime.now(UTC):
-            continue
-        yield _observation(
+            return None
+        return _observation(
             source, title, WEATHER_LINK, published_at=issued,
             identity=f"{title}|{issued}|{start}|{end}", language="en" if english else "ms",
         ) | {"valid_from": start, "valid_to": end, "publisher": "MET Malaysia (CC BY 4.0)"}
+
+    return _item_rows(_list(_json(body))[:50], parse_item)
 
 
 def collect_source(source, http=None):
@@ -426,4 +488,4 @@ def collect_source(source, http=None):
     unique = {}
     for row in rows:
         unique.setdefault(row["content_id"], row)
-    return list(unique.values())
+    return SourceItems(unique.values(), skipped=rows.skipped)

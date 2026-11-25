@@ -6,6 +6,7 @@ import hashlib
 from html import escape
 
 from .delivery import send_parts, split_parts
+from .diagnostics import diagnostic
 from .report import build_report
 from .scoring import trend_key
 from .sources import SourceError, collect_source
@@ -17,6 +18,13 @@ MYT = timezone(timedelta(hours=8))
 HOUR = timedelta(hours=1)
 GOOD = {"ok", "empty"}
 CORE = {"trends", "news"}
+SOURCE_ERROR_CODES = {
+    "dns_error", "private_address_blocked", "url_blocked", "host_backoff", "robots_invalid",
+    "robots_denied", "robots_rate_unsupported", "response_encoding", "network_error",
+    "response_too_large", "invalid_xml", "feed_schema", "trend_schema", "malformed_item",
+    "invalid_json", "json_schema", "source_deadline", "hn_item_schema", "mastodon_tag_link",
+    "weather_schema", "source_disabled", "retention_approval_required", "timeout", "too_many_malformed_items",
+}
 
 
 def utc_now():
@@ -55,9 +63,12 @@ def _collect_one(source, fetch, clock):
         items = fetch(source)
     except SourceError as exc:
         reason = exc.code
-        if not isinstance(reason, str) or len(reason) > 48 or not reason.replace("_", "").isalnum():
-            reason = "source_unavailable"
-        return {"status": "error", "reason": reason, "count": 0, "observed_at": None}, []
+        failure = diagnostic(exc, source_id=source.id)
+        skipped = getattr(exc, "skipped", 0)
+        if reason not in SOURCE_ERROR_CODES:
+            status = failure["http_status"]
+            reason = f"http_{status}" if status is not None else "source_unavailable"
+        return {"status": "error", "reason": reason, "count": 0, "skipped": skipped, "observed_at": None}, [], failure
     observed_at = instant(clock()).isoformat()
     distinct = {}
     seen_urls = set()
@@ -75,7 +86,10 @@ def _collect_one(source, fetch, clock):
         distinct[identity] = {**item, "source_id": source.id, "kind": source.kind, "geo": source.geo,
                               "language": item.get("language", source.language), "observed_at": observed_at}
     status = "ok" if distinct else "empty"
-    return {"status": status, "observed_at": observed_at, "count": len(distinct)}, list(distinct.values())
+    return {
+        "status": status, "observed_at": observed_at, "count": len(distinct),
+        "skipped": getattr(items, "skipped", 0),
+    }, list(distinct.values()), None
 
 
 def _remember_first_seen(store, rows, files):
@@ -109,7 +123,8 @@ def _core_outcome(sources, states, approved):
     return "ok" if full else "partial" if valid else "failed"
 
 
-def collect_slot(store, sources, approved, start, execution, *, planned_at=None, fetch=collect_source, clock=utc_now):
+def collect_slot(store, sources, approved, start, execution, *, planned_at=None, timing=None,
+                 fetch=collect_source, clock=utc_now):
     started = instant(clock())
     start = hour(start)
     key = partition(start)
@@ -128,12 +143,14 @@ def collect_slot(store, sources, approved, start, execution, *, planned_at=None,
             states[source.id] = {"status": policy, "count": 0, "observed_at": None}
         else:
             pending.append(source)
-    rows = []
+    rows, diagnostics = [], []
     with ThreadPoolExecutor(max_workers=5) as pool:
         futures = {source.id: pool.submit(_collect_one, source, fetch, clock) for source in pending}
         for source_id, future in futures.items():
-            states[source_id], items = future.result()
+            states[source_id], items, failure = future.result()
             rows.extend(items)
+            if failure is not None:
+                diagnostics.append(failure)
     run_id = "collect-" + start.strftime("%Y%m%dT%H")
     for row in rows:
         row["slot"] = start.isoformat()
@@ -155,8 +172,10 @@ def collect_slot(store, sources, approved, start, execution, *, planned_at=None,
         "execution": execution, "operation": "collect", "slot": start.isoformat(), "run_id": run_id,
         "planned_at": current["planned_at"], "started_at": started.isoformat(), "ended_at": ended.isoformat(),
         "elapsed_seconds": (ended - started).total_seconds(), "attempted_sources": list(futures),
-        "outcome": outcome, "rows_added": len(rows), "sources": states,
+        "outcome": outcome, "rows_added": len(rows), "sources": states, "diagnostics": diagnostics,
     }
+    if timing is not None:
+        audit.update(timing)
     archive_key = f"observations/{key}.jsonl.gz"
     if manifest is None or rows:
         files[archive_key] = archive

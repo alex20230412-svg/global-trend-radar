@@ -6,17 +6,35 @@ import re
 import sys
 from tempfile import TemporaryDirectory
 
+from .binding import bind_chat, bound_chat_id, confirm_bind
 from .delivery import DeliveryError, TelegramClient, reconcile_delivery
+from .diagnostics import diagnostic
 from .pipeline import (
     MYT, collect_slot, deliver, delivery_callbacks, hour, instant, prepare_report,
     utc_now,
 )
 from .sources import load_sources
-from .storage import CODE_REPO, PrivateGitStore, StorageError, github_object, json_bytes, read_json
+from .storage import CODE_REPO, PrivateGitStore, PublicationError, StorageError, github_object, json_bytes, read_json
 
 
 REPORT_ID = re.compile(r"(?:(?:daily|smoke)-\d{4}-\d{2}-\d{2}|alert-\d{8}T\d{2})\Z")
 DELIVERED = {"SENT", "CONFIRMED"}
+BINDING_ACTIONS = {"bind_chat", "confirm_bind"}
+PUBLIC_ERRORS = {
+    "live_gate_closed", "workflow_identity_invalid", "public_code_repository_required",
+    "workflow_metadata_mismatch", "private_report_missing", "report_source_approval_changed",
+    "report_operation_invalid", "report_before_target", "delivery_part_invalid",
+    "telegram_binding_required", "binding_owner_required", "source_approval_required",
+    "schedule_start_required", "schedule_start_invalid", "schedule_not_started",
+    "github_credential_missing", "github_access_rejected", "github_metadata_oversize",
+    "github_metadata_unavailable", "github_invalid_metadata", "private_repository_required",
+    "repository_size_unknown", "repository_capacity_stop", "git_operation_unconfirmed",
+    "git_operation_failed", "git_publication_failed", "invalid_storage_key", "storage_symlink_rejected",
+    "observation_checksum_mismatch", "observation_archive_invalid", "observation_count_mismatch",
+    "invalid_telegram_token", "binding_bot_changed", "binding_private_start_required",
+    "binding_ambiguous_start", "binding_updates_unavailable", "binding_updates_incomplete",
+    "binding_not_requested", "binding_confirmation_expired", "binding_ack_unconfirmed", "binding_state_invalid",
+}
 
 
 def authorize(env, operation):
@@ -69,22 +87,33 @@ def _audit(store, execution, **fields):
     store.publish({f"runs/{execution}.json": json_bytes(fields)}, "Record radar run status")
 
 
-def _telegram(env):
-    return TelegramClient(env.get("TELEGRAM_BOT_TOKEN", ""), env.get("TELEGRAM_CHAT_ID", ""))
+def _telegram(env, store):
+    token = env.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = bound_chat_id(store, token)
+    if chat_id is None:
+        raise StorageError("telegram_binding_required")
+    return TelegramClient(token, chat_id)
 
 
 def _collection(store, sources, approved, env, execution, created, now):
-    slot, planned_at = collect_plan(created, env["GITHUB_EVENT_NAME"] == "schedule")
-    if slot != hour(now):
-        _audit(store, execution, outcome="missed_late", slot=slot.isoformat(),
-               planned_at=planned_at.isoformat() if planned_at else None, started_at=now.isoformat())
-        print("collect outcome=missed_late")
-        return 1
-    state = collect_slot(store, sources, approved, slot, execution, planned_at=planned_at)
+    planned_slot, planned_at = collect_plan(created, env["GITHUB_EVENT_NAME"] == "schedule")
+    slot = hour(now)
+    late = slot > planned_slot
+    timing = {
+        "created_at": created.isoformat(),
+        "planned_slot": planned_slot.isoformat() if planned_at else None,
+        "planned_at": planned_at.isoformat() if planned_at else None,
+        "late_to_next_slot": late,
+        "delay_seconds": int((now - (planned_at or created)).total_seconds()),
+    }
+    # A delayed trigger may collect current data, but it cannot claim the missed slot or
+    # stand in for this hour's own scheduled trigger when computing schedule coverage.
+    due = planned_at if slot == planned_slot else None
+    state = collect_slot(store, sources, approved, slot, execution, planned_at=due, timing=timing)
     alert_id = "alert-" + slot.strftime("%Y%m%dT%H")
     alert = read_json(store, f"reports/alerts/{alert_id}.json")
     if alert:
-        status = deliver(store, alert_id, alert["parts"], _telegram(env))
+        status = deliver(store, alert_id, alert["parts"], _telegram(env, store))
         print(f"alert delivery={status}")
     else:
         status = "SENT"
@@ -145,16 +174,16 @@ def _report(store, sources, approved, env, execution, created, now, schedule_fro
             _audit(store, execution, outcome=action, started_at=now.isoformat(), report_id=report_id, part=number)
             print("report outcome=reconciled")
             return 0
-    status = deliver(store, report_id, parts, _telegram(env))
+    status = deliver(store, report_id, parts, _telegram(env, store))
     _audit(store, execution, outcome=status, started_at=now.isoformat(), report_id=report_id,
            ended_at=utc_now().isoformat(), parts=len(parts))
     print(f"report delivery={status} parts={len(parts)}")
     return int(status not in DELIVERED)
 
 
-def _approved_sources(sources, raw):
-    approved = set(raw.split())
+def _approved_sources(sources, raw=""):
     available = {source.id for source in sources if source.enabled and source.retention == "long_term"}
+    approved = set(raw.split()) or available
     if not approved or not approved <= available:
         raise StorageError("source_approval_required")
     return approved
@@ -162,8 +191,17 @@ def _approved_sources(sources, raw):
 
 def run_live(operation, env):
     execution = authorize(env, operation)
-    sources = load_sources()
-    approved = _approved_sources(sources, env.get("RADAR_APPROVED_SOURCES", ""))
+    action = env.get("RADAR_REPORT_ACTION") if operation == "report" else None
+    binding = action in BINDING_ACTIONS
+    if binding:
+        owner = CODE_REPO.split("/", 1)[0]
+        actor = env.get("GITHUB_ACTOR")
+        if (env["GITHUB_EVENT_NAME"] != "workflow_dispatch" or actor != owner
+                or env.get("GITHUB_TRIGGERING_ACTOR", actor) != owner):
+            raise StorageError("binding_owner_required")
+    else:
+        sources = load_sources()
+        approved = _approved_sources(sources, env.get("RADAR_APPROVED_SOURCES", ""))
     starts = env.get("RADAR_SCHEDULE_FROM", "")
     if env["RADAR_STAGE"] == "c-scheduled" and not starts:
         raise StorageError("schedule_start_required")
@@ -174,16 +212,33 @@ def run_live(operation, env):
     with TemporaryDirectory(prefix="radar-private-", dir=env.get("RUNNER_TEMP")) as temp:
         store = PrivateGitStore.clone(temp, env.get("DATA_REPO_TOKEN"))
         now = utc_now()
-        if schedule_from and env["GITHUB_EVENT_NAME"] == "schedule" and created < schedule_from:
-            raise StorageError("schedule_not_started")
         try:
+            if schedule_from and env["GITHUB_EVENT_NAME"] == "schedule" and created < schedule_from:
+                raise StorageError("schedule_not_started")
+            if binding:
+                token = env.get("TELEGRAM_BOT_TOKEN", "")
+                status = bind_chat(store, token) if action == "bind_chat" else confirm_bind(
+                    store, token, requested_at=created.timestamp(),
+                )
+                _audit(store, execution, operation=action, outcome=status, started_at=now.isoformat())
+                print(f"binding outcome={status}")
+                return int(status not in {"ACK_SENT", "BOUND", "ALREADY_BOUND"})
             if operation == "collect":
                 return _collection(store, sources, approved, env, execution, created, now)
             return _report(store, sources, approved, env, execution, created, now, schedule_from)
-        except DeliveryError as exc:
-            failure_execution = f"{execution}-delivery" if operation == "collect" else execution
-            _audit(store, failure_execution, outcome="delivery_error", reason=str(exc), started_at=now.isoformat())
-            raise StorageError("delivery_error") from exc
+        except PublicationError:
+            raise
+        except Exception as exc:
+            try:
+                audit = read_json(store, f"runs/{execution}.json") or {
+                    "operation": operation, "outcome": "operation_failed", "started_at": now.isoformat(),
+                }
+                audit["failure_diagnostic"] = diagnostic(exc)
+                _audit(store, execution, **audit)
+            except (StorageError, OSError, ValueError):
+                # No fallback printing if private storage is unavailable.
+                pass
+            raise
 
 
 def main(argv=None, env=None):
@@ -193,8 +248,9 @@ def main(argv=None, env=None):
         return 2
     try:
         return run_live(args[0], os.environ if env is None else env)
-    except StorageError as exc:
-        print(f"radar outcome={exc}")
+    except (StorageError, DeliveryError) as exc:
+        outcome = str(exc)
+        print(f"radar outcome={outcome if outcome in PUBLIC_ERRORS else 'operation_failed'}")
     except Exception:
         # Public Actions logs must never include request URLs, exception bodies, or private content.
         print("radar outcome=operation_failed")

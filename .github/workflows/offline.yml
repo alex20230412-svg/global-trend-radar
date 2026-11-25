@@ -1,6 +1,7 @@
 name: Radar offline tests
 
 on:
+  pull_request:
   workflow_dispatch:
 
 permissions:

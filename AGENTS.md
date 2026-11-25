@@ -25,7 +25,7 @@
 ### 公开仓库的安全
 - 本仓库是公开的。禁止提交：Token、密码、chat_id、API key、个人资料、Owner 其他项目的名称或业务细节、采集到的原始数据。
 - Token 只放在 GitHub Secrets；代码通过环境变量读取。
-- 工作流只允许 `schedule` 与 `workflow_dispatch` 触发；不使用 `pull_request_target`；第三方 Action 固定到 commit SHA。
+- 真实工作流只允许 `schedule` 与 `workflow_dispatch` 触发。无凭证、无 environment 的离线测试可由 `pull_request` 触发。任何工作流均禁用 `pull_request_target`，第三方 Action 固定到 commit SHA。
 
 ### Git 流程
 - 不直接提交到 `main`。每项工作开新分支，提交 Draft PR。

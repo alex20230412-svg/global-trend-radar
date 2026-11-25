@@ -4,11 +4,15 @@ import json
 import socket
 import unittest
 from dataclasses import replace
+from datetime import UTC, datetime
+from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import parse_qs, quote, urlsplit
 
 import httpx
 
-from radar.source_http import HOSTS, MAX_BODY, OriginGate, SourceHttp, public_address
+from radar.pipeline import _collect_one
+from radar.source_http import HOSTS, MAX_BODY, USER_AGENT, OriginGate, SourceHttp, public_address
 from radar.sources import SourceError, clean_url, collect_source, load_sources
 
 
@@ -68,6 +72,25 @@ NEWS_RSS = b"""
 """
 
 
+def trend_fixture(count, invalid=()):
+    entries = []
+    for index in range(1, count + 1):
+        date = "" if index in invalid else "<pubDate>Thu, 26 Nov 2026 07:00:00 +0800</pubDate>"
+        entries.append(f"""
+          <item>
+            <title>测试 AI &amp; 商品 + {index}</title>
+            <link>https://trends.google.com/trending?geo=MY</link>
+            {date}
+            <ht:approx_traffic>200+</ht:approx_traffic>
+          </item>
+        """)
+    return f"""
+    <rss xmlns:ht="https://trends.google.com/trending/rss">
+      <channel><title>Synthetic mixed feed</title>{''.join(entries)}</channel>
+    </rss>
+    """.encode()
+
+
 class FixtureHttp:
     def __init__(self, responses):
         self.responses = responses
@@ -103,7 +126,10 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(first["title"], "Mock AI device & accessories")
         self.assertEqual(first["volume_raw"], "200+")
         self.assertEqual(first["published_at"], "2026-11-25T23:00:00+00:00")
-        self.assertTrue(first["url"].endswith("#fictional"))
+        self.assertEqual(
+            first["url"],
+            "https://trends.google.com/trends/explore?geo=MY&q=Mock%20AI%20device%20%26%20accessories",
+        )
         self.assertEqual([item["publisher"] for item in first["related"]], ["Mock press", "Mock press two"])
         self.assertEqual(first["related"][0]["url"], "https://example.org/article")
         self.assertNotIn("Discard this mock body", json.dumps(first))
@@ -113,10 +139,60 @@ class SourceTests(unittest.TestCase):
         result = self.collect("trends_my", GOOGLE_RSS)
         self.assertEqual(result[0]["related"], [])
 
-    def test_trend_missing_historical_field_is_failure_not_zero(self):
+    def test_skips_a_bad_item_and_keeps_19_valid_observations(self):
+        source = self.sources["trends_my"]
+
+        def clock():
+            return datetime(2026, 11, 26, tzinfo=UTC)
+
+        for skipped, invalid in [(1, {7}), (20, range(1, 21))]:
+            with self.subTest(skipped=skipped):
+                body = trend_fixture(20, invalid=invalid)
+                stats, rows, failure = _collect_one(
+                    source, lambda current: self.collect(current.id, body), clock,
+                )
+                success = skipped == 1
+                self.assertEqual(stats["status"], "ok" if success else "error")
+                self.assertEqual(stats["count"], 19 if success else 0)
+                self.assertEqual(stats["skipped"], skipped)
+                if success:
+                    self.assertEqual([row["rank"] for row in rows], [n for n in range(1, 21) if n != 7])
+                    self.assertIsNone(failure)
+                else:
+                    self.assertEqual(rows, [])
+                    self.assertEqual(stats["reason"], "too_many_malformed_items")
+
+    def test_skips_missing_traffic_without_inventing_a_volume(self):
         feed = GOOGLE_RSS.replace(b"<ht:approx_traffic>200+</ht:approx_traffic>", b"")
-        with self.assertRaisesRegex(SourceError, "^trend_schema$"):
+        with self.assertRaisesRegex(SourceError, "^too_many_malformed_items$") as found:
             self.collect("trends_my", feed)
+        self.assertEqual(found.exception.skipped, 2)
+
+    def test_half_malformed_is_usable_and_more_than_half_or_all_bad_fails(self):
+        rows = self.collect("trends_my", trend_fixture(20, invalid=range(1, 11)))
+        self.assertEqual((len(rows), rows.skipped), (10, 10))
+        for num_bad in (11, 20):
+            with self.subTest(num_bad=num_bad):
+                with self.assertRaisesRegex(SourceError, "^too_many_malformed_items$") as found:
+                    self.collect("trends_my", trend_fixture(20, invalid=range(1, num_bad + 1)))
+                self.assertEqual(found.exception.skipped, num_bad)
+
+    def test_trend_urls_are_distinct_and_include_geo_and_encoded_term(self):
+        rows = self.collect("trends_sg", trend_fixture(20))
+        self.assertEqual(len({row["url"] for row in rows}), 20)
+        for row in rows:
+            term = row["title"]
+            url = row["url"]
+            self.assertEqual(url, f"https://trends.google.com/trends/explore?geo=SG&q={quote(term, safe='')}")
+            self.assertEqual(parse_qs(urlsplit(url).query), {"geo": ["SG"], "q": [term]})
+
+    def test_non_trend_item_validation_uses_same_threshold(self):
+        usable = {"topic": "Mock topic"}
+        rows = self.collect("bluesky", {"topics": [None, usable]})
+        self.assertEqual(rows.skipped, 1)
+        self.assertEqual(rows[0]["rank"], 2)
+        with self.assertRaisesRegex(SourceError, "^too_many_malformed_items$"):
+            self.collect("bluesky", {"topics": [usable, {}, None]})
 
     def test_news_all_four_ids_with_missing_bernama_pubdate(self):
         for key in ("malaysiakini", "malay_mail", "fmt", "bernama"):
@@ -171,11 +247,12 @@ class SourceTests(unittest.TestCase):
 
     def test_hacker_news_item_failure_does_not_persist_partial_as_success(self):
         stem = "https://hacker-news.firebaseio.com/v0/item/"
-        with self.assertRaisesRegex(SourceError, "^hn_item_http_429$"):
+        with self.assertRaisesRegex(SourceError, "^hn_item_http_429$") as found:
             self.collect("hn", [1, 2], extra={
                 stem + "1.json": {"id": 1, "type": "story", "title": "Mock story"},
-                stem + "2.json": SourceError("http_429", 15),
+                stem + "2.json": SourceError("http_429", 15, http_status=429),
             })
+        self.assertEqual(found.exception.http_status, 429)
 
     def test_hacker_news_top_30_bounds(self):
         source = self.sources["hn"]
@@ -286,6 +363,45 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(request.headers["Host"], "trends.google.com")
         self.assertEqual(request.extensions["sni_hostname"], "trends.google.com")
         self.assertIn("GlobalTrendRadar", request.headers["User-Agent"])
+
+    def test_review_robots_paths_and_minimum_intervals(self):
+        path = Path(__file__).with_name("fixtures") / "review_robots.json"
+        cases = json.loads(path.read_text(encoding="utf-8"))["cases"]
+        self.assertEqual(set(cases), HOSTS)
+        sources = {source.id: source for source in load_sources()}
+        for host, case in cases.items():
+            with self.subTest(host=host):
+                now = 100.0
+                starts = []
+
+                def sleep(delay):
+                    nonlocal now
+                    now += delay
+
+                def handler(request):
+                    starts.append((request.url.path, now))
+                    if request.url.path == "/robots.txt":
+                        return httpx.Response(case["robots_status"], stream=BytesStream(case["body"].encode()))
+                    return httpx.Response(200, stream=BytesStream(b"synthetic response"))
+
+                source = sources[case["source_id"]]
+                self.assertEqual(urlsplit(source.url).hostname, host)
+                with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+                    http = SourceHttp(
+                        client, resolver=lambda _: "192.0.2.10", sleep=sleep, clock=lambda: now,
+                        origins={host: OriginGate()},
+                    )
+                    for _ in range(2):
+                        self.assertEqual(http.load(source.url), b"synthetic response")
+                    robots = http.origins[host].robots
+                    self.assertTrue(robots.can_fetch(source.url, USER_AGENT))
+                    if "minimum_interval" in case:
+                        interval = case["minimum_interval"]
+                        self.assertGreaterEqual(starts[1][1] - starts[0][1], interval)
+                        self.assertGreaterEqual(starts[2][1] - starts[1][1], interval)
+                    if source.id == "hn":
+                        self.assertTrue(robots.can_fetch(f"https://{host}/v0/item/123.json", USER_AGENT))
+                        self.assertFalse(robots.can_fetch(f"https://{host}/v0/item/123.jsonx", USER_AGENT))
 
     def test_retry_after_and_never_follow_redirects(self):
         requests = []

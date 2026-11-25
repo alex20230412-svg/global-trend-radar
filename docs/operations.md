@@ -2,25 +2,26 @@
 
 本轮停在阶段 A。以下操作在 Claude 独立审核和 Owner 单独批准阶段 B 后执行。阶段 C 的 cron 激活另行审核批准。
 
-## 阶段 B 准备
+## 阶段 B 上线前置条件
 
-1. Owner 审阅 PR #5 的方向记录并决定是否先合并。PR #5 合并后，将阶段 A PR 的目标改为 `main` 并复核差异。如果 PR #5 经 squash 或 rebase 合并，先基于新的 `main` 整理阶段 A 提交再复核。阶段 A PR 经 Claude 审核及 Owner 批准后由 Owner 合并。两条真实工作流只接受公开代码仓库的受审 `main`。
-2. 在专用数据仓库确认可见性为 **Private**、默认分支为 `main`。空仓库可先添加一份空白说明，使 `main` 存在。关闭该仓库 Actions。用公开代码仓库标准 `ubuntu-24.04` runner，保持账户现有计费设置。 [私有仓库 Actions 设置](https://github.com/alex20230412-svg/global-trend-radar-data/settings/actions) · [GitHub Actions 计费](https://docs.github.com/en/actions/concepts/billing-and-usage)
-3. 在 Telegram 打开官方 [@BotFather](https://t.me/BotFather)，发送 `/newbot`，为 Global Trend Radar 创建独立 Bot。打开新 Bot 的私聊发送 `/start`。在自己电脑的交互式终端，从本项目目录运行 `python -m tools.get_chat_id`。把 BotFather 的 Token 输入本地隐藏提示。在同一个 Bot 私聊发送工具给的一次性验证文字，再回终端按提示继续。工具只在本地显示通过核验的正数 Chat ID。Token 与 Chat ID 直接填入下表指定设置，避免聊天、终端录屏或公开文件。 [BotFather 官方说明](https://core.telegram.org/bots/features#botfather) · [getUpdates 官方说明](https://core.telegram.org/bots/api#getupdates)
-4. 创建 **fine-grained personal access token**。Resource owner 选择自己，Repository access 选择 **Only select repositories**，只勾选 `global-trend-radar-data`。Repository permissions 只增加 **Contents: Read and write**，保留 GitHub 强制的 Metadata read。选择有限有效期，记录本地续期日期，随后把 PAT 填到代码仓库环境的 Secret。 [直接创建 fine-grained PAT](https://github.com/settings/personal-access-tokens/new) · [GitHub 权限说明](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
-5. 在公开代码仓库的 **Settings → Environments** 创建 `radar-live`，将 Deployment branches and tags 设为 **Selected branches and tags**，只添加 Branch `main`。在该环境的 **Environment secrets** 新增三个 Secret。 [公开代码仓库 Environment 设置](https://github.com/alex20230412-svg/global-trend-radar/settings/environments)
+阶段 A 的 PR #7 依赖 PR #5。PR #5 由 Owner 决定是否合并。合并后，将阶段 A 提交整理到新的 `main`，将 PR #7 的目标改为 `main` 并复核差异。阶段 B 获批及代码由 Owner 合并后，真实工作流才可以接受设置。
+
+来源审批以审核后的 `config/sources.yaml` 为准。Owner 确认一批来源及其保存权后，只将对应条目的 `retention` 从 `pending` 改为 `long_term` 并提交审核。执行时默认选用所有 `enabled: true`、`retention: long_term` 的条目。`RADAR_APPROVED_SOURCES` 留空即可，有需要时填写空格分隔的 ID 缩小范围。当前只有天气符合条件，MY 榜和全球核心榜的验收需要先确认核心来源。临时展示 Trends 相关新闻的标题和媒体名仍需单独批准，生产日报尚未接入。 [来源证据表](sources.md)
+
+## 阶段 B 浏览器和手机设置
+
+1. 在官方 BotFather 发送 `/newbot`，创建项目专用 Bot。保存 BotFather 发给你的 Token，稍后直接填入 GitHub。 [@BotFather](https://t.me/BotFather) · [官方说明](https://core.telegram.org/bots/features#botfather)
+2. 确认专用数据仓库为 **Private**、默认分支为 `main` 且 Actions 已关闭。空仓库可添加一份空白说明，使 `main` 存在。创建限期 **fine-grained PAT**，Repository access 选 **Only select repositories**，只选 `global-trend-radar-data`，仓库权限仅增加 **Contents: Read and write**，保留 GitHub 默认的 Metadata read。 [私库 Actions 设置](https://github.com/alex20230412-svg/global-trend-radar-data/settings/actions) · [创建 PAT](https://github.com/settings/personal-access-tokens/new)
+3. 在公开代码仓库创建 `radar-live` Environment，将部署分支限制为 **Selected branches and tags → Branch `main`**。填写下表的两个 **Environment secrets**。批准阶段 B 后，在 **Actions Variables** 将 `RADAR_STAGE` 设为 `b-manual`。`RADAR_SCHEDULE_FROM` 留到阶段 C。 [Environment 设置](https://github.com/alex20230412-svg/global-trend-radar/settings/environments) · [Actions Variables](https://github.com/alex20230412-svg/global-trend-radar/settings/variables/actions)
+4. 打开自己刚创建的 Bot 的私人对话，发送一条 `/start`。在 15 分钟内启动绑定，确保该 Bot 专用于本项目。
+5. 在 **Radar report → Run workflow → main** 选择 `bind_chat`。在自己与该 Bot 的私聊里看到通用绑定消息后，在同一工作流选择 `confirm_bind`，于发起绑定的 30 分钟内完成。收到 `BOUND` 后才可发送日报。Chat ID 由程序保存到私库，两个动作均无需填写 Chat ID 或其他工作流输入。 [Radar report](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/report.yml)
 
 | Environment Secret 名称 | 填写值及用途 |
 | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | BotFather 颁给这个新 Bot 的 Token，用于验证并发送私聊。 |
-| `TELEGRAM_CHAT_ID` | 工具在本人终端显示的私聊 ID，用于唯一允许的收件人。 |
 | `DATA_REPO_TOKEN` | 专用私有数据仓库的 fine-grained PAT，用于持久化及读回。 |
 
-`RUN_METADATA_TOKEN` 自动由 GitHub 提供，只读取当前公开项目的工作流元数据，用来区分排队时间和实际运行时间。无需自行填写。
-
-在 [Actions Variables](https://github.com/alex20230412-svg/global-trend-radar/settings/variables/actions) 先配置 `RADAR_APPROVED_SOURCES`，填写空格分隔的已批准来源 ID。长期保存在私有 Git 的权利须逐源留证，并在经审核的 `config/sources.yaml` 中标为 `long_term`。Google Trends 关联新闻元数据有独立的 `retain_related` 开关。阶段 A 只有天气具备明确长期保存许可，第一批应在权限核实后从 MY、少量邻近地区与本地 RSS 开始。若只允许 `weather`，可以测试管路，MY 和全球核心验收仍未完成。来源核对见 [来源证据表](sources.md)。
-
-准备无误后将 `RADAR_STAGE` 设为 `b-manual`。本阶段两个 cron 仍是注释，`RADAR_SCHEDULE_FROM` 留空。工作流环境的三个 Secret 与变量只属于本项目。
+如有多个候选私聊，绑定会停止。若没有在自己的私聊收到通用确认，保持未确认，等 30 分钟到期后发送新的 `/start`。如果 Bot 已有无法核对的消息队列，先暂停并复核绑定台账。`python -m tools.get_chat_id` 保留为本人本地排查工具。密钥只填 GitHub Environment，Chat ID 留在专用私库。 [Telegram getUpdates](https://core.telegram.org/bots/api#getupdates)
 
 ## 阶段 B 首次手动运行
 
@@ -32,7 +33,7 @@
 
 ## 阶段 C 启用与验收
 
-阶段 B 通过后，Owner 批准一个独立 PR 打开 `collect.yml` 的 `17 * * * *` 和 `report.yml` 的 `30 0 * * *`。为 `RADAR_SCHEDULE_FROM` 填写第一个计划采集时间（UTC ISO 8601，分钟为 17），将 `RADAR_STAGE` 设为 `c-scheduled`。覆盖按实际成功与缺失报告。08:30 MYT 是目标时间，超过 30 分钟日报会标注延迟。GitHub 不提供独立的原始计划时间字段，程序用工作流创建时间推断最近计划槽，排队到其他小时会记为迟到漏跑。
+阶段 B 通过后，Owner 批准一个独立 PR 打开 `collect.yml` 的 `17 * * * *` 和 `report.yml` 的 `30 0 * * *`。为 `RADAR_SCHEDULE_FROM` 填写第一个计划采集时间（UTC ISO 8601，分钟为 17），将 `RADAR_STAGE` 设为 `c-scheduled`。08:30 MYT 是目标时间，超过 30 分钟日报会标注延迟。GitHub 的工作流创建时间用于推断最近计划槽。跨小时排队延迟时，采集写入实际小时，原计划槽与延迟写进私有审计。原槽缺口保留，迟到运行不会替代实际小时自己的计划触发。
 
 首 24 小时核对至少 20 个有有效核心数据并持久化的计划槽，完整、部分、失败和漏跑各自列出。连续三天查收日报并记录实际延时。第七天复核来源稳定性、真实覆盖、重复投递、容量及费用。GitHub 公开仓库长期无活动可能停用定时任务。平台整体停摆时，同仓库的告警也无法运行。 [定时触发行为](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule) · [并发队列](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
 
@@ -41,5 +42,6 @@
 - 删除或清空 `RADAR_STAGE` 可跳过后续真实作业。需要立即停机时停用这两个工作流，检查仍在运行的作业及私有流水。中断一个在途发送会留下待确认状态。
 - 使用私库流水和私聊里的 `报告 ID · 分段 x/y` 核对。确认已收到时，在报告工作流选 `confirm_received`，填报告 ID 与段号。只有在确认未送达时才选 `confirm_unsent`。仍不确定就保留状态。确认后用 `resume` 处理剩余段；已确认或收到 API 成功回执的段会跳过。工作流输入只需日期编号和段号。
 - PAT 到期或撤销时，`github_access_rejected` 等状态可见于公开 Actions，私库不可写期间无法安全记录并发出 Telegram 告警。暂停、续期并替换同名 Secret 后恢复。Bot Token 变化会阻止已部分投递报告在新身份下续发，新报告使用新凭证。
+- 公开日志显示安全结果码。发生异常后在私库 `runs/` 查异常类名、radar 模块与行号，以及适用时的来源 ID 和 HTTP 状态。存储本身不可写时，审计也无法提交。
 - 容量预警是 GitHub 仓库 size 元数据达到 256 MiB，512 MiB 时安全停止。GitHub 的统计可能滞后。源码和私库历史都应按规则审查。若来源许可变更，立即暂停并清除其批准项；普通 git 删除仍会保留历史，历史改写或迁移需要 Owner 单独授权。
 - 以私库中的 `manifests`、`runs`、`health` 和 `deliveries` 为验收记录。公开仓库没有自动健康提交。私库校验和不符时保留证据，核对原提交与来源后再处理，缺失小时不回填。

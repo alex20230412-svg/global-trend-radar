@@ -1,0 +1,196 @@
+"""Bounded, credential-free HTTP for approved source endpoints."""
+
+import ipaddress
+import socket
+import time
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
+from threading import Lock
+
+import httpx
+from protego import Protego
+
+
+USER_AGENT = "GlobalTrendRadar/1.0 (+https://github.com/alex20230412-svg/global-trend-radar)"
+MAX_BODY = 2 * 1024 * 1024
+RETRY_SECONDS = 10
+MIN_INTERVAL = 0.5
+HOSTS = frozenset({
+    "trends.google.com",
+    "www.malaysiakini.com",
+    "www.malaymail.com",
+    "cms.freemalaysiatoday.com",
+    "www.bernama.com",
+    "hacker-news.firebaseio.com",
+    "public.api.bsky.app",
+    "mastodon.social",
+    "api.data.gov.my",
+})
+
+
+class SourceError(Exception):
+    """An error that can be recorded without disclosing upstream text."""
+
+    def __init__(self, code, retry_after=None):
+        super().__init__(code)
+        self.code = code
+        self.retry_after = retry_after
+
+
+@dataclass
+class OriginGate:
+    lock: object = field(default_factory=Lock)
+    robots: Protego | None = None
+    last_request: float = 0
+    stopped: bool = False
+
+
+# These gates cover concurrent geographic feeds within one workflow process.
+ORIGINS = {host: OriginGate() for host in HOSTS}
+
+
+def public_address(host):
+    try:
+        candidates = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+    except OSError:
+        raise SourceError("dns_error") from None
+    if not candidates:
+        raise SourceError("dns_error")
+    addresses = [ipaddress.ip_address(candidate[4][0]) for candidate in candidates]
+    if any(
+        not address.is_global or address.is_multicast or address.is_reserved
+        for address in addresses
+    ):
+        raise SourceError("private_address_blocked")
+    # Standard hosted runners are IPv4-capable. Fall back to IPv6 for IPv6-only hosts.
+    return str(min(addresses, key=lambda address: address.version))
+
+
+def _retry_after(raw):
+    raw = raw.strip()
+    if raw.isascii() and raw.isdigit() and len(raw) <= 8:
+        return int(raw)
+    try:
+        value = parsedate_to_datetime(raw)
+        if value is not None and value.tzinfo is not None:
+            return max(0, (value - datetime.now(UTC)).total_seconds())
+    except (ValueError, TypeError, OverflowError):
+        pass
+    return None
+
+
+class SourceHttp:
+    """Use a separate client for each source to isolate cookies and TLS connections."""
+
+    def __init__(self, client, resolver=public_address, sleep=time.sleep, origins=None):
+        self.client = client
+        self.resolve = resolver
+        self.sleep = sleep
+        self.addresses = {}
+        self.origins = ORIGINS if origins is None else origins
+
+    def load(self, url):
+        try:
+            target = httpx.URL(url)
+        except (httpx.InvalidURL, ValueError):
+            raise SourceError("url_blocked") from None
+        if (
+            target.scheme != "https" or target.port not in (None, 443)
+            or target.userinfo or target.host not in HOSTS or target.fragment
+        ):
+            raise SourceError("url_blocked")
+        gate = self.origins[target.host]
+        with gate.lock:
+            if gate.stopped:
+                raise SourceError("host_backoff")
+            if target.host not in self.addresses:
+                self.addresses[target.host] = self.resolve(target.host)
+            try:
+                return self._load(target, gate)
+            except SourceError as error:
+                if error.code in {"http_401", "http_403", "http_429"}:
+                    gate.stopped = True
+                raise
+
+    def _load(self, target, gate):
+        if gate.robots is None:
+            robots_url = target.copy_with(path="/robots.txt", query=None)
+            try:
+                robots = self._request(robots_url, gate, MIN_INTERVAL)
+            except SourceError as error:
+                if error.code not in {"http_404", "http_410"}:
+                    raise
+                robots = b""
+            if robots.lstrip().startswith(b"<"):
+                raise SourceError("robots_invalid")
+            try:
+                gate.robots = Protego.parse(robots.decode("utf-8-sig"))
+            except UnicodeError:
+                raise SourceError("robots_invalid") from None
+        robots = gate.robots
+        if not robots.can_fetch(str(target), USER_AGENT):
+            raise SourceError("robots_denied")
+        rate = robots.request_rate(USER_AGENT)
+        wait = max(
+            MIN_INTERVAL,
+            robots.crawl_delay(USER_AGENT) or 0,
+            rate.seconds / rate.requests if rate is not None and rate.requests > 0 else 0,
+        )
+        if wait > RETRY_SECONDS or robots.visit_time(USER_AGENT) is not None:
+            raise SourceError("robots_rate_unsupported")
+        return self._request(target, gate, wait)
+
+    def _request(self, target, gate, interval):
+        for attempt in range(2):
+            delay = gate.last_request + interval - time.monotonic()
+            if delay > 0:
+                self.sleep(delay)
+            gate.last_request = time.monotonic()
+            try:
+                return self._read(target)
+            except SourceError as error:
+                if attempt or error.code not in {
+                    "network_error", "http_429", "http_500", "http_502", "http_503", "http_504",
+                }:
+                    raise
+                wait = error.retry_after
+                # If no wait was advertised, defer a 429 retry to a subsequent run.
+                if (error.code == "http_429" and wait is None) or (
+                    wait is not None and wait > RETRY_SECONDS
+                ):
+                    raise
+                self.sleep(max(1, wait or 0))
+        raise AssertionError("unreachable")
+
+    def _read(self, target):
+        # Pin the validated IP for the actual socket connection, with TLS SNI and cert
+        # verification against the named origin. Payload URLs never enter this path.
+        address = self.addresses[target.host]
+        url = target.copy_with(host=address)
+        deadline = time.monotonic() + 12
+        try:
+            with self.client.stream(
+                "GET", url,
+                headers={"User-Agent": USER_AGENT, "Host": target.host, "Accept-Encoding": "identity"},
+                extensions={"sni_hostname": target.host},
+                follow_redirects=False,
+            ) as response:
+                if response.status_code != 200:
+                    raise SourceError(
+                        f"http_{response.status_code}",
+                        _retry_after(response.headers.get("Retry-After", "")),
+                    )
+                encoding = response.headers.get("Content-Encoding", "identity")
+                if encoding.lower() != "identity":
+                    raise SourceError("response_encoding")
+                body = bytearray()
+                for chunk in response.iter_raw():
+                    if time.monotonic() > deadline:
+                        raise SourceError("network_error")
+                    if len(body) + len(chunk) > MAX_BODY:
+                        raise SourceError("response_too_large")
+                    body.extend(chunk)
+                return bytes(body)
+        except httpx.HTTPError:
+            raise SourceError("network_error") from None

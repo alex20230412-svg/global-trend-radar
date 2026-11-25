@@ -14,8 +14,9 @@
 | D-006 | 2026-11-25 | 资讯暂时仅供私人使用，不授权公开频道或对外发布 | [Owner 决定](https://github.com/alex20230412-svg/global-trend-radar/issues/4#issuecomment-7167038713) |
 | D-007 | 2026-11-25 | 当前验证阶段由 Owner 手动触发 AI 收集；暂不开发，不授权定时任务、部署或实际经营试点 | [Owner 决定](https://github.com/alex20230412-svg/global-trend-radar/issues/4#issuecomment-7167038713) |
 | D-008 | 2026-11-25 | 禁止两个 AI 自动循环对话；讨论由 Owner 控制，完成后 WAIT_OWNER | Owner 在 ChatGPT 会话原话：「不要让 AI 自动循环对话」；[ChatGPT 代录](https://github.com/alex20230412-svg/global-trend-radar/issues/2#issuecomment-7165465613)，[Claude 确认](https://github.com/alex20230412-svg/global-trend-radar/issues/2#issuecomment-7165568273) |
+| D-009 | 2026-11-26 | 授权第一轮阶段 A，按 Issue #6 正式审核开发、使用合成样本与 Mock 离线测试、提交 Draft PR 后等待 Claude 独立审核和 Owner 决定。分别批准阶段 B 手动真实验证及阶段 C 定时运行验收。继续保持 RM0、私人使用、双仓库隔离及禁止 AI 自动循环，健康记录只写专用私库。 | Owner 2026-11-26 在 Codex 会话中的明确授权及 [Issue #6 审核意见](https://github.com/alex20230412-svg/global-trend-radar/issues/6#issuecomment-7167409077) |
 
-D-007 仅约束当前阶段，不取消长期自动化目标。P-001 至 P-008 及后续技术提议仍待批准；验证周期和实际商业试点尚未获批。
+D-007 保留为之前手动验证阶段的历史决定。D-009 取代其中「暂不开发」的限制，生效范围为阶段 A。P-001 至 P-008 保留为历史提议，只有 D-009 所引用的修订范围获批。本轮不授权商业试点。
 
 ## 提议（待讨论）
 
@@ -34,7 +35,7 @@ D-007 仅约束当前阶段，不取消长期自动化目标。P-001 至 P-008 �
 
 - 不预选行业（D-005）；后续根据 Owner 对真实资讯的反馈调整优先级。
 - GitHub Billing 设置确认
-- 独立 Telegram Bot 与频道
+- 阶段 B 批准后创建独立 Telegram Bot，推送至 Owner 私聊。
 
 ## 否决
 

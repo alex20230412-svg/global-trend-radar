@@ -1,0 +1,52 @@
+name: Radar collect
+
+on:
+  workflow_dispatch:
+  # Stage C only. Activate this trigger through an Owner-approved PR.
+  # schedule:
+  #   - cron: '17 * * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    if: >-
+      github.repository == 'alex20230412-svg/global-trend-radar' &&
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'workflow_dispatch' &&
+      (vars.RADAR_STAGE == 'b-manual' || vars.RADAR_STAGE == 'c-scheduled')) ||
+      (github.event_name == 'schedule' && vars.RADAR_STAGE == 'c-scheduled'))
+    concurrency:
+      group: radar-private-writer
+      queue: max
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: read
+    environment: radar-live
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14.10'
+      - name: Install verified dependencies
+        shell: bash
+        run: >-
+          python -m pip --isolated --disable-pip-version-check install --no-cache-dir
+          --index-url https://pypi.org/simple --require-hashes --only-binary=:all: -r requirements.lock
+      - name: Run private radar collect
+        shell: bash
+        env:
+          RADAR_STAGE: ${{ vars.RADAR_STAGE }}
+          RADAR_APPROVED_SOURCES: ${{ vars.RADAR_APPROVED_SOURCES }}
+          RADAR_SCHEDULE_FROM: ${{ vars.RADAR_SCHEDULE_FROM }}
+          RUN_METADATA_TOKEN: ${{ github.token }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m radar.live collect

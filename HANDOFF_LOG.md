@@ -4,6 +4,19 @@
 
 ---
 
+## 2026-11-26 · Claude · 中文早报与阶段 C
+
+- 新增 `radar/brief.py` 和 `preview` 动作（#17）。阶段 C 的 cron、开始时间自动记录、保活和容量限制（#18）。热修：开始时间写到了不允许的私库根目录（#19，影响约 3 分钟，没有写入任何数据）。
+- Gemini 实测迭代：
+  - key 空白和失败原因记录（#20）；
+  - 输入先在代码里整理：体育合并、去重、限条数（#21）；
+  - 防编造：地区由数据决定，丢弃没有编号的行，先用 Flash（#22）；
+  - 模型超时就换下一个（#23；第一次提交误删 GeminiWriter，CI 拦下，修正后才合并）。
+- 最新预览 `preview-1433-2026-11-26`：AI 版正常。还可以改进：Flash-Lite 偶尔把主题保留成英文小写；同一人物在不同栏目仍可能重复（相关标题不完全相同时去重不掉）。
+- 等待 Owner 确认格式，并把 `RADAR_STAGE` 改为 `c-scheduled`。
+
+---
+
 ## 2026-11-26 · Claude · 阶段 B 真实运行通过
 
 - Owner 完成 6 步设置后，Claude 依次触发：`bind_chat`（第一次 `binding_private_start_required`，Owner 补发 `/start` 后 `ACK_SENT`）、collect（24/24，334 条）、`confirm_bind`（`BOUND`）、同小时 collect（跳过全部，`rows_added=0`）、report send（`SENT`，1 段）、同日 send（不重发）。

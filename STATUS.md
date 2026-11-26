@@ -2,12 +2,14 @@
 
 最后更新 2026-11-26 MYT，Claude。
 
-## 阶段 B · 无凭证实测通过，等待 Owner 一次设置凭证
+## 阶段 B · 真实私库与 Telegram 实测通过（2026-11-26）
 
-- PR #10（Codex）已审核并合并。Claude 在 main 运行 `live-check` 5 次，修复了来源地址变更、中文 RSS 语言声明、超时和诊断问题（PR #11–#13）。最后两次运行 **24/24 来源正常**，两次采集幂等，日报 1 段约 3,500 字，未降级。 [实测记录](docs/sources.md)
-- GDELT 从 GitHub runner 一直连不上（`ConnectTimeout`），保持关闭。华文媒体目前只有当今大马中文版；其他报社没有可核实的官方 RSS，见 [华文来源核查](docs/chinese-sources.md)。
-- 私库已确认为 Private、默认分支 `main`。会话代理禁止 AI 设置 environment、variables 和 secrets，所以由 Owner 按 [运行手册第二节](docs/operations.md) 一次完成 6 步，之后由 Claude 负责采集、绑定、发日报和核对私库。
-- cron 仍为注释，`RADAR_STAGE` 未设置。新增费用 RM0。
+- Owner 完成凭证设置（`radar-live` environment、两个 secret、`RADAR_STAGE=b-manual`、私库关闭 Actions）。
+- 真实采集：24/24 来源正常，334 条观测写入私库。同一小时重跑跳过全部来源，`rows_added=0`，校验和不变。
+- Telegram：`bind_chat` → Owner 确认收到 → `confirm_bind`，结果为 `BOUND`；chat_id 只存私库。日报 `smoke-2026-11-26` 1 段 `SENT`。同日再次 send 不重发，`attempts` 仍为 1。
+- 第一次 `bind_chat` 找不到 `/start`。Owner 在 Bot 私聊补发 `/start` 后成功，原因未核实。
+- 实测容量：每小时观测压缩后约 76 KB，约 1.8 MB/天。按此推算约 9 个月会到 512 MiB 停止阈值，阶段 C 前需要定归档策略。
+- 下一步：Owner 批准阶段 C（开启每小时采集与 08:30 MYT 日报的 cron），另开 PR 处理。cron 仍为注释。新增费用 RM0。
 
 ## Claude 收尾修订（PR #8）
 

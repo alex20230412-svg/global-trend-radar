@@ -3,6 +3,7 @@
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from math import ceil
+import re
 
 import httpx
 
@@ -10,6 +11,8 @@ from .storage import DATA_REPO, GITHUB_API_ROOT
 
 
 EXPIRATION_HEADER = "GitHub-Authentication-Token-Expiration"
+# GitHub documents the header but not its exact format; accept "UTC" and "+0000" styles.
+OFFSET = re.compile(r"\s*([+-])([0-9]{2}):?([0-9]{2})$")
 MYT = timezone(timedelta(hours=8))
 
 
@@ -37,6 +40,8 @@ def token_expiry_notice(token, now, *, client=None):
         timestamp = raw.strip()
         if timestamp.endswith(" UTC"):
             timestamp = timestamp.removesuffix(" UTC") + "+00:00"
+        elif OFFSET.search(timestamp):
+            timestamp = OFFSET.sub(lambda match: f"{match[1]}{match[2]}:{match[3]}", timestamp)
         expiry = datetime.fromisoformat(timestamp)
         if expiry.tzinfo is None:
             return "invalid_header", None

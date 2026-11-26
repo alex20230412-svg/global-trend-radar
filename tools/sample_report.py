@@ -8,6 +8,7 @@ from radar.layout import entry_key
 from radar.report import build_report
 from radar.sources import load_sources
 from radar.youtube import YouTubeVideo, render_youtube
+from tools.sample_weekly import print_sample_weekly
 
 
 NOW = datetime(2026, 11, 27, 0, 37, tzinfo=UTC)
@@ -154,6 +155,8 @@ def main():
     youtube_plain = _message_text(youtube)
     print(f"\n合成 YouTube 消息 · 1 段 · {_units(youtube_plain)} UTF-16 单元")
     print(youtube_plain)
+    print()
+    print_sample_weekly()
 
 
 if __name__ == "__main__":

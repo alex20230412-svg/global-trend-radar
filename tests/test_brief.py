@@ -183,6 +183,8 @@ class BriefTests(unittest.TestCase):
                           entry_key("合成流行曲", section="music", artist="合成歌手")],
                          [row["key"] for row in brief.entries])
         self.assertEqual(["malaysia", "music"], [row["section"] for row in brief.entries])
+        first_week = build_brief(snapshot, NOW, "daily-2026-11-27", previous_keys=None)
+        self.assertEqual(0, _message_text(first_week.parts[0]).count("🆕"))
 
     def test_json_discards_invented_numbers_long_labels_and_extra_item_ids(self):
         snapshot = {"malaysia": [

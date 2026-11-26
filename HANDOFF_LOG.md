@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-11-26 · Codex · Issue #33 PR C 周报
+
+- C 接在 B 上，完成任务 9。周报复用实际送达的日报条目，按出现天数排榜。缺少前一周数据时注明覆盖，周报归档与日报和 YouTube 分开。新增 `weekly-preview` 和受现有阶段 C 开关保护的周日 09:00 MYT 调度。
+- Windows 实际运行 `.venv/Scripts/python.exe -X utf8 -m unittest discover -s tests -q`，195 项通过，含七天合成汇总、周边界、缺日、分段、调度和防重复。样本脚本打印日报、YouTube 和周报。真实预览与定时验收仍待批准。新增费用 RM0。 [周报操作](docs/operations.md#周日热点周报)
+
+---
+
 ## 2026-11-26 · Codex · Issue #33 PR B 来源
 
 - B 接在 A 上，完成任务 7–8。维基榜使用带联系方式的 User-Agent 和两级日期选择。复用现有小时采集、RSS、排行和私有归档。GitHub 只读凭证只用于固定存档请求。小时槽预留标记保护重跑，跨小时仍保留观测。

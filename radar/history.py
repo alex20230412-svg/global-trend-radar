@@ -91,14 +91,19 @@ def _legacy_keys(payload):
 
 
 def previous_brief_keys(store, day):
-    keys = set()
+    """Keys shown in the last 7 delivered daily briefs, or None when none were delivered.
+
+    Without any earlier brief every row would look new, so callers then show no markers.
+    """
+    keys, found = set(), False
     for offset in range(1, 8):
         payload = _daily_payload(store, day - timedelta(days=offset))
         if payload is None:
             continue
+        found = True
         entries = _entries(payload)
         if entries is None:
             keys.update(_legacy_keys(payload))
         else:
             keys.update(entry["key"] for entry in entries)
-    return keys
+    return keys if found else None

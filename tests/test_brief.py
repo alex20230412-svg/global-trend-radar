@@ -29,9 +29,10 @@ class FakeWriter:
 AI_TEXT = """## 📅 11月27日 热点早报
 
 **🇲🇾 马来西亚今天大家在搜什么**
-[m1] 课堂 AI 助教：一款离线多语助教开放试用（日本、新加坡也在搜） https://evil.example/x
-1. [m2] 购物节：低耗雾灯新品打折（新加坡、泰国也在搜）
+[m1] 课堂 AI 助教：一款离线多语助教开放试用（也在中国、巴西、德国搜寻） https://evil.example/x
+1. [m2] 购物节：低耗雾灯新品打折
 [m99] 不存在的编号
+凭空多出来的一行
 
 📰 马来西亚新闻
 [n1] 社区修理站开放自行车检修日
@@ -77,12 +78,24 @@ class BriefTests(unittest.TestCase):
         self.assertIn('href="https://example.org/synthetic/context/2"', html)
         self.assertIn("以上由 AI 根据当天标题整理", text)
         self.assertIn("<b>📅 11月27日 热点早报</b>", html)
+        # Regions the model invented are replaced by the data's own list; invented lines are dropped.
+        self.assertNotIn("巴西", text)
+        self.assertNotIn("不存在的编号", text)
+        self.assertNotIn("凭空多出来的一行", text)
+        items = collect_items(self.snapshot)
+        expected = f"（{'、'.join(items['malaysia'][0]['also_searched_in'])}也在搜）"
+        self.assertIn("课堂 AI 助教：一款离线多语助教开放试用" + expected, text)
         system, prompt = writer.calls[0]
         self.assertIn("不得加入条目里没有的事实", system)
         self.assertNotIn("http", prompt)
+        self.assertNotIn("also_searched_in", prompt)
+        self.assertNotIn("新加坡", prompt)
 
     def test_invalid_or_failed_model_output_falls_back_to_plain(self):
+        no_items = ("📅 11月27日 热点早报\n\n🇲🇾 马来西亚今天大家在搜什么\n"
+                    + "这里没有任何条目编号，只是一段模型自己写的话，内容足够长。\n" * 4)
         for writer, status in ((FakeWriter("太短"), "invalid_output"),
+                               (FakeWriter(no_items), "render_ValueError"),
                                (FakeWriter(None, "http_429", "gemini-flash-lite-latest"), "http_429"),
                                (FakeWriter("没有提到国名的长文本。" * 20), "invalid_output")):
             with self.subTest(status=status):
@@ -95,7 +108,8 @@ class BriefTests(unittest.TestCase):
         payload = json.loads(_prompt_payload(items, NOW))
         self.assertEqual("11月27日", payload["date"])
         self.assertEqual("m1", payload["malaysia"][0]["id"])
-        self.assertIn("新加坡", payload["malaysia"][0]["also_searched_in"])
+        self.assertIn("新加坡", items["malaysia"][0]["also_searched_in"])
+        self.assertNotIn("also_searched_in", payload["malaysia"][0])  # regions are added by code only
         self.assertNotIn("http", json.dumps(payload, ensure_ascii=False))
         self.assertLessEqual(len(items["malaysia"]), 8)
         self.assertLessEqual(len(items["other"]), 4)
@@ -150,14 +164,14 @@ class GeminiWriterTests(unittest.TestCase):
 
         def handler(request):
             seen.append(request)
-            if "gemini-flash-lite-latest" in request.url.path:
+            if "/models/gemini-flash-latest:" in request.url.path:
                 return httpx.Response(404, json={"error": {"message": KEY}})
             return httpx.Response(200, json={"candidates": [{"content": {"parts": [
                 {"text": "思考过程", "thought": True}, {"text": "中文早报"},
             ]}}]})
 
         text, status, model = self.writer(handler).write("系统", "条目")
-        self.assertEqual(("中文早报", "ok", "gemini-flash-latest"), (text, status, model))
+        self.assertEqual(("中文早报", "ok", "gemini-flash-lite-latest"), (text, status, model))
         for request in seen:
             self.assertEqual(KEY, request.headers["x-goog-api-key"])
             self.assertNotIn(KEY, str(request.url))
@@ -187,7 +201,7 @@ class GeminiWriterTests(unittest.TestCase):
 
     def test_rate_limit_and_network_errors_are_codes_only(self):
         text, status, model = self.writer(lambda request: httpx.Response(429, text=KEY)).write("s", "p")
-        self.assertEqual((None, "http_429", "gemini-flash-lite-latest"), (text, status, model))
+        self.assertEqual((None, "http_429", "gemini-flash-latest"), (text, status, model))
 
         def broken(request):
             raise httpx.ConnectTimeout(KEY)

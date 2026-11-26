@@ -20,9 +20,10 @@ from .sources import clean_url
 
 
 MYT = timezone(timedelta(hours=8), "MYT")
-PROMPT_VERSION = "brief-v1"
+PROMPT_VERSION = "brief-v2"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
-GEMINI_MODELS = ("gemini-flash-lite-latest", "gemini-flash-latest")
+# Flash follows the format and the no-invention rule better than Flash-Lite (first live run).
+GEMINI_MODELS = ("gemini-flash-latest", "gemini-flash-lite-latest")
 # Visible ASCII only (no spaces or line breaks that could reach a header); Google key formats vary.
 GEMINI_KEY = re.compile(r"[\x21-\x7e]{20,512}")
 MAX_BRIEF_CHARS = 3400
@@ -46,20 +47,20 @@ SYSTEM_PROMPT = """你是一位为马来西亚华人读者写早报的中文编�
 规则：
 1. 只根据用户提供的 JSON 条目写，不得加入条目里没有的事实、数字、人名或日期。「可能的生意线索」一节除外，但那里也只能从条目推想，并且语气要保守。
 2. 搜索词本身看不出意思时，用它的 headline 解释；仍然看不出就写「原因不明」，不要猜。
-3. 英文、马来文一律翻成简体中文。人名、品牌、球队名可以保留原文或用常见中文译名。
-4. 多场体育比赛合并成一条。
-5. 每条一行，开头保留条目编号，例如 [m1]，不要写链接，不要用 Markdown（不要 ** 或 #）。
+3. 英文、马来文一律翻成简体中文，主题也写成中文。人名、品牌、球队名可以保留原文或用常见中文译名。
+4. 不要写任何国家或地区名单，程序会自己补上。
+5. 只写 JSON 里有的条目，每个条目最多一行，开头保留条目编号，例如 [m1]；不要新增条目，不要写链接，不要用 Markdown（不要 ** 或 #）。
 6. 严格按下面的格式和顺序输出，某一节没有条目就整节省略（天气没有就写「今天没有天气警告」）。
 
 格式：
 📅 {date} 热点早报
 
 🇲🇾 马来西亚今天大家在搜什么
-[m1] 主题：一句话说明（不超过 40 字）（其他国家也在搜时，括号写中文国名）
+[m1] 主题：一句话说明（不超过 40 字）
 （最多 8 条）
 
 🌏 其他国家在搜
-[o1] 主题：一句话说明（中文国名）
+[o1] 主题：一句话说明（不超过 40 字）
 （最多 4 条）
 
 📰 马来西亚新闻
@@ -185,10 +186,14 @@ def collect_items(snapshot):
     return items
 
 
+HIDDEN_KEYS = {"link", "also_searched_in", "countries"}  # regions are added by code, never by the model
+
+
 def _prompt_payload(items, now):
     payload = {"date": _date(now)}
     for section, rows in items.items():
-        payload[section] = [{key: value for key, value in row.items() if key != "link" and value not in (None, "", [])}
+        payload[section] = [{key: value for key, value in row.items()
+                             if key not in HIDDEN_KEYS and value not in (None, "", [])}
                             for row in rows]
     return json.dumps(payload, ensure_ascii=False)
 
@@ -264,8 +269,52 @@ def _links(items):
     return {row["id"]: row["link"] for rows in items.values() for row in rows if row.get("link")}
 
 
+SECTION_KINDS = (("📅", "title"), ("🇲🇾", "items"), ("🌏", "items"), ("📰", "items"), ("⚠", "items"),
+                 ("💡", "ideas"))
+MODEL_REGIONS = re.compile(r"\s*[（(][^（）()]*(?:也在|搜)[^（）()]*[）)]")
+
+
+def shape_ai(text, items):
+    """Keep only known sections and real item lines; regions come from the data, not the model."""
+    rows = {row["id"]: row for section in items.values() for row in section}
+    shaped = []
+    for section in _sections(text):
+        head = section[0].strip()
+        kind = next((kind for prefix, kind in SECTION_KINDS if head.startswith(prefix)), None)
+        if kind is None:
+            continue
+        if kind == "title":
+            shaped.append([head])
+            continue
+        lines = [head]
+        if kind == "ideas":
+            lines += [line for line in section[1:] if line.lstrip().startswith(("-", "•"))][:2]
+        else:
+            used = set()
+            for line in section[1:]:
+                match = re.search(r"\[([mnow][0-9]{1,2})\]", line)
+                if not match or match.group(1) not in rows or match.group(1) in used:
+                    continue
+                used.add(match.group(1))
+                row = rows[match.group(1)]
+                line = MODEL_REGIONS.sub("", line).rstrip()
+                if row.get("also_searched_in"):
+                    line += f"（{'、'.join(row['also_searched_in'])}也在搜）"
+                elif row.get("countries"):
+                    line += f"（{'、'.join(row['countries'])}）"
+                lines.append(line)
+            if len(lines) == 1 and head.startswith("⚠") and not items["weather"]:
+                lines.append("今天没有天气警告")
+        if len(lines) > 1:
+            shaped.append(lines)
+    return shaped
+
+
 def ai_blocks(text, items, snapshot):
-    blocks = [_block(section, _links(items)) for section in _sections(text)]
+    sections = shape_ai(text, items)
+    if not any(section[0].startswith("🇲🇾") and len(section) > 1 for section in sections):
+        raise ValueError("no_malaysia_items")
+    blocks = [_block(section, _links(items)) for section in sections]
     footer = _footer(snapshot) + " · 以上由 AI 根据当天标题整理，可能有误，点 🔗 看原文"
     blocks.append((escape(footer, quote=False), footer))
     return blocks

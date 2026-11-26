@@ -1,15 +1,12 @@
 # STATUS
 
-最后更新 2026-11-26 MYT，Claude。
+最后更新 2026-11-26 MYT，Codex。
 
-## 早报 v5 · 已派给 Codex（2026-11-26）
+## 早报 v5 · A 排版与投递准备（2026-11-26）
 
-- Owner 确定整批改动（D-014），任务单见 [Issue #33](https://github.com/alex20230412-svg/global-trend-radar/issues/33)：
-  - 等宽表格加折叠区，🆕 新上榜，YouTube 静音；
-  - 周日周报，私库钥匙到期提醒，修跨栏重复和 AI 编造细节；
-  - 维基百科（马来西亚），中国热议。
-- 来源规则已改：公开、不需登录的来源都可以用，底线是不破解反爬机制、不直接读 robots.txt 禁止的网站。
-- 流程：Codex 分 3 个 PR 提交，Claude 审核合并，发预览给 Owner 确认。
+- PR A 实现等宽表格及折叠区、七天历史新上榜、YouTube 静音、钥匙提醒及 Gemini JSON 校验。新上榜比较 MYT 日界线前七天的已送达日报。旧日报无逐行记录时，只认能由实际发送链接确认的条目。
+- Windows 本地 173 项离线测试通过。合成早报和 YouTube 各 1 段。真实 Telegram 排版和 GitHub 到期提示仍待 Claude 预览复核。
+- PR B 处理维基百科和中国来源，PR C 处理周日周报。三个 Draft PR 分别提供离线验收，等待 Claude 审核与 Owner 预览确认。 [D-014 任务单](https://github.com/alex20230412-svg/global-trend-radar/issues/33)
 
 ## YouTube 热门 · 已启用，真实预览通过（2026-11-26）
 

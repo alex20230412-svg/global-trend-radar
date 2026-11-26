@@ -60,6 +60,7 @@ Owner 收到的是中文早报（`radar/brief.py`）：有 `GEMINI_API_KEY` 时�
 - 删除或清空 `RADAR_STAGE` 可跳过后续真实作业。需要立即停机时停用这两个工作流，检查仍在运行的作业及私有流水。中断一个在途发送会留下待确认状态。
 - 使用私库流水和私聊里的 `报告 ID · 分段 x/y` 核对。确认已收到时，在报告工作流选 `confirm_received`，填报告 ID 与段号。只有在确认未送达时才选 `confirm_unsent`。仍不确定就保留状态。确认后用 `resume` 处理剩余段；已确认或收到 API 成功回执的段会跳过。工作流输入只需日期编号和段号。
 - PAT 到期或撤销时，`github_access_rejected` 等状态可见于公开 Actions，私库不可写期间无法安全记录并发出 Telegram 告警。暂停、续期并替换同名 Secret 后恢复。Bot Token 变化会阻止已部分投递报告在新身份下续发，新报告使用新凭证。
+- 早报读取专用私库元数据的 GitHub 到期响应头。剩余 14 天以内，私聊页脚显示到期日期和余天数。更新位置是代码仓库 `radar-live` 环境中的 `DATA_REPO_TOKEN`。缺少响应头或查询失败时，公开日志只显示状态码。已生成的早报在恢复投递时沿用原有内容。 [GitHub 到期响应头](https://github.blog/changelog/2021-07-26-expiration-options-for-personal-access-tokens/)
 - 公开日志显示安全结果码。发生异常后在私库 `runs/` 查异常类名、radar 模块与行号，以及适用时的来源 ID 和 HTTP 状态。存储本身不可写时，审计也无法提交。
 - 容量预警是 GitHub 仓库 size 元数据达到 700 MiB，900 MiB 时安全停止（GitHub 建议仓库远低于 1 GB）。实测约 76 KB/小时，D-011 起每源新闻 30 条、相关报道 2 条。GitHub 的统计可能滞后。源码和私库历史都应按规则审查。若来源许可变更，立即暂停并清除其批准项；普通 git 删除仍会保留历史，历史改写或迁移需要 Owner 单独授权。
 - 以私库中的 `manifests`、`runs`、`health` 和 `deliveries` 为验收记录。公开仓库没有自动健康提交。私库校验和不符时保留证据，核对原提交与来源后再处理，缺失小时不回填。

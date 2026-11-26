@@ -2,6 +2,7 @@
 
 import json
 import unittest
+from urllib.parse import quote
 
 import httpx
 
@@ -10,10 +11,11 @@ from radar.brief import (
     GeminiWriter, _prompt_payload, build_brief, collect_items, sanitize,
 )
 from radar.delivery import _message_text
+from radar.layout import entry_key, table_width
 from tools.sample_report import NOW, synthetic_report
 
 
-KEY = "AIzaSyFAKE_offline_test_key_000000000000"
+KEY = "synthetic-gemini-key-for-offline-test"
 
 
 class FakeWriter:
@@ -26,29 +28,20 @@ class FakeWriter:
         return self.result
 
 
-AI_TEXT = """## 📅 11月27日 热点早报
-
-**🔥 马来西亚现在最热门的话题**
-[m1] 课堂 AI 助教：一款离线多语助教开放试用（也在中国、巴西、德国搜寻） https://evil.example/x
-1. [m2] 购物节：低耗雾灯新品打折
-[m99] 不存在的编号
-凭空多出来的一行
-
-🎵 大家在听（马来西亚 Apple Music 热门歌曲）
-[s1] 示例情歌 - 示例歌手甲：抒情慢歌
-[s9] 编造的歌
-
-📱 大家在下载（马来西亚 App Store 热门免费 App）
-[a1] 示例记账 App：记录日常开支
-
-📰 马来西亚新闻
-[n1] 社区修理站开放自行车检修日
-
-⚠️ 天气
-[w1] 示例区域 A 雷暴警告，到 11-27 10:20
-
-💡 可能的生意线索（AI 推测，仅供参考）
-- 低耗灯具促销受关注，可留意相关零售。"""
+AI_TEXT = json.dumps({
+    "items": [
+        {"id": "m1", "label": "课堂助教", "why": "一款离线多语助教开放试用 https://evil.example/x"},
+        {"id": "m2", "label": "购物节", "why": "低耗雾灯新品打折"},
+        {"id": "m99", "label": "不存在的编号", "why": "凭空多出来的一行"},
+        {"id": "m1", "label": "重复条目", "why": "重复内容"},
+        {"id": "s1", "label": "示例情歌", "why": "抒情慢歌"},
+        {"id": "s9", "label": "编造的歌", "why": "虚构"},
+        {"id": "a1", "label": "示例记账", "why": "记录日常开支"},
+        {"id": "n1", "label": "社区修理站", "why": "开放自行车检修日"},
+        {"id": "w1", "label": "雷暴警告", "why": "风险升高"},
+    ],
+    "ideas": [{"text": "低耗灯具促销受关注，可留意相关零售。", "ids": ["m2"]}],
+}, ensure_ascii=False)
 
 
 class BriefTests(unittest.TestCase):
@@ -62,10 +55,12 @@ class BriefTests(unittest.TestCase):
         self.assertEqual("no_writer", brief.meta["status"])
         self.assertEqual(1, len(brief.parts))
         text = _message_text(brief.parts[0])
-        for expected in ("马来西亚现在最热门的话题", "全球正在热议", "大家在听", "示例情歌（合成） - 示例歌手甲",
-                         "大家在下载", "示例记账 App（Finance）", "马来西亚新闻", "天气", "新加坡", "搜索 ", "🔗",
+        for expected in ("马来西亚热搜", "全球热议", "大家在听", "示例情歌（合成） · 示例歌手甲",
+                         "大家在下载", "示例记账 App · Finance", "新闻和天气", "新加坡", "8K+", "🔗",
                          "AI 摘要今天不可用", "数据来源"):
             self.assertIn(expected, text)
+        self.assertIn("<pre>", brief.parts[0])
+        self.assertIn("<blockquote expandable>", brief.parts[0])
         for unexpected in ("Hacker News", "Mastodon 标签", "Bluesky", "也在 SG", "📰1 家"):
             self.assertNotIn(unexpected, text)
         # The one failing synthetic source is named in plain Chinese in the footer.
@@ -85,19 +80,19 @@ class BriefTests(unittest.TestCase):
         self.assertIn('href="https://example.org/synthetic/context/1"', html)
         self.assertIn('href="https://example.org/synthetic/context/2"', html)
         self.assertIn("以上由 AI 根据当天标题整理", text)
-        self.assertIn("<b>📅 11月27日 热点早报</b>", html)
+        self.assertIn("<b>📅 11月27日（周五）热点早报</b>", html)
         # Regions the model invented are replaced by the data's own list; invented lines are dropped.
         self.assertNotIn("巴西", text)
         self.assertNotIn("不存在的编号", text)
         self.assertNotIn("凭空多出来的一行", text)
-        items = collect_items(self.snapshot)
-        first = items["malaysia"][0]
-        expected = f" · 搜索 {first['volume']}（{'、'.join(first['also_searched_in'])}也在搜）"
-        self.assertIn("课堂 AI 助教：一款离线多语助教开放试用" + expected, text)
-        self.assertIn("示例情歌 - 示例歌手甲：抒情慢歌", text)
+        self.assertIn("课堂助教 · 一款离线多语助教开放试用", text)
+        self.assertIn("（日本、新加坡也在搜）", text)
+        self.assertIn("示例情歌（合成） · 抒情慢歌", text)
         self.assertNotIn("编造的歌", text)
+        self.assertNotIn("重复条目", text)
         self.assertIn('href="https://music.apple.com/my/album/synthetic-1"', html)
-        self.assertIn("示例记账 App：记录日常开支", text)
+        self.assertIn("示例记账 App · 记录日常开支", text)
+        self.assertIn("低耗灯具促销受关注", text)
         system, prompt = writer.calls[0]
         self.assertIn("不得加入条目里没有的事实", system)
         self.assertNotIn("http", prompt)
@@ -105,10 +100,9 @@ class BriefTests(unittest.TestCase):
         self.assertNotIn("新加坡", prompt)
 
     def test_invalid_or_failed_model_output_falls_back_to_plain(self):
-        no_items = ("📅 11月27日 热点早报\n\n🇲🇾 马来西亚今天大家在搜什么\n"
-                    + "这里没有任何条目编号，只是一段模型自己写的话，内容足够长。\n" * 4)
+        no_items = json.dumps({"items": [{"id": "w1", "label": "雷暴", "why": "雷暴警告"}], "ideas": []})
         for writer, status in ((FakeWriter("太短"), "invalid_output"),
-                               (FakeWriter(no_items), "render_ValueError"),
+                               (FakeWriter(no_items), "invalid_output"),
                                (FakeWriter(None, "http_429", "gemini-flash-lite-latest"), "http_429"),
                                (FakeWriter("没有提到国名的长文本。" * 20), "invalid_output")):
             with self.subTest(status=status):
@@ -129,7 +123,7 @@ class BriefTests(unittest.TestCase):
 
     def test_sports_merge_repeats_drop_and_caps_apply_before_the_model(self):
         def entry(title, geos=("MY",), headline=None, category="其他"):
-            row = {"title": title, "geos": list(geos), "url": f"https://example.org/{len(title)}",
+            row = {"title": title, "geos": list(geos), "url": f"https://example.org/{quote(title)}",
                    "category": category}
             if headline:
                 row["context"] = {"title": headline, "url": f"https://example.org/c/{len(title)}"}
@@ -159,10 +153,69 @@ class BriefTests(unittest.TestCase):
         self.assertEqual(["新加坡", "英国"], sport["also_searched_in"])
         others = [row["term"] for row in items["other"]]
         self.assertNotIn("andy taylor duran duran", others)  # same headline as a Malaysian topic
-        self.assertEqual(["earthquake", "体育赛事"], others)
+        self.assertEqual(["earthquake"], others)
         self.assertEqual([("THUNDERSTORMS WARNING", "11-27 14:00")],
                          [(row["title"], row["until"]) for row in items["weather"]])
         self.assertEqual([f"m{number}" for number in range(1, 9)], [row["id"] for row in items["malaysia"]])
+
+    def test_new_markers_follow_canonical_entries_and_report_window_input(self):
+        row = {"title": "  青原科技  ", "url": "https://example.org/news"}
+        snapshot = {"malaysia": [row], "charts": {"apple_music_my": [
+            {"title": "合成流行曲", "artist": "合成歌手", "url": "https://example.org/music"},
+        ]}}
+        brief = build_brief(snapshot, NOW, "daily-2026-11-27",
+                            previous_keys={entry_key("青原科技")}, token_notice="⚠️ 私库钥匙快到期")
+        latest = _message_text(brief.parts[0])
+        self.assertEqual(1, latest.count("🆕"))
+        self.assertIn("⚠️ 私库钥匙快到期", latest)
+        self.assertEqual([entry_key("青原科技"),
+                          entry_key("合成流行曲", section="music", artist="合成歌手")],
+                         [row["key"] for row in brief.entries])
+        self.assertEqual(["malaysia", "music"], [row["section"] for row in brief.entries])
+
+    def test_json_discards_invented_numbers_long_labels_and_extra_item_ids(self):
+        snapshot = {"malaysia": [
+            {"title": "甲艺人", "url": "https://example.org/1", "context": {"title": "甲艺人获提名"}},
+            {"title": "乙艺人", "url": "https://example.org/2"},
+            {"title": "丙电影", "url": "https://example.org/3", "context": {"title": "丙电影已有 18 场上映"}},
+        ]}
+        writer = FakeWriter(json.dumps({"items": [
+            {"id": "m1", "label": "甲艺人", "why": "享年六十五岁"},
+            {"id": "m2", "label": "这个标签有超过八个字", "why": "预计 65 号发布"},
+            {"id": "m3", "label": "新电影", "why": "已有 18 场"},
+            {"id": "m999", "label": "虚构项目", "why": "虚构事实"},
+        ], "ideas": []}, ensure_ascii=False))
+        brief = build_brief(snapshot, NOW, "smoke-2026-11-27", writer)
+        plain = _message_text(brief.parts[0])
+        self.assertEqual("ai", brief.meta["mode"])
+        self.assertIn("甲艺人获提名", plain)
+        self.assertIn("乙艺人", plain)
+        self.assertIn("已有 18 场", plain)
+        for denied in ("六十五", "65", "超过八个字", "虚构项目"):
+            self.assertNotIn(denied, plain)
+
+    def test_cross_section_alias_urls_and_wiki_adult_filter(self):
+        snapshot = {
+            "malaysia": [{"title": "新电影", "url": "https://example.org/movie?utm_source=first"}],
+            "monitored_regions": [
+                {"title": "热门的电影", "url": "https://example.org/movie"},
+                {"title": "新电影", "url": "https://example.org/alias"},
+                {"title": "其他主题", "url": "https://example.org/other"},
+            ],
+            "wiki": [{"title": "成人影片", "url": "https://zh.wikipedia.org/wiki/Adult"},
+                     {"title": "合成页面", "url": "https://zh.wikipedia.org/wiki/Sample", "views_ceil": 12000}],
+            "china": [{"title": "合成中国话题", "source_label": "微博", "url": "https://example.org/trending"}],
+        }
+        brief = build_brief(snapshot, NOW, "smoke-2026-11-27")
+        plain = _message_text(brief.parts[0])
+        self.assertIn("12K", plain)
+        self.assertIn("合成中国话题（微博）", plain)
+        for denied in ("热门的电影", "成人影片"):
+            self.assertNotIn(denied, plain)
+        table = brief.parts[0].split("<pre>", 1)[1].split("</pre>", 1)[0]
+        self.assertNotIn("<a", table)
+        self.assertTrue(all(table_width(line) <= 28 for line in table.splitlines()))
+        self.assertEqual(["malaysia", "global", "china", "wiki"], [row["section"] for row in brief.entries])
 
     def test_sanitize_strips_links_markdown_and_controls(self):
         self.assertEqual("标题\n\n正文 。", sanitize("## **标题**\n\n\n\n正文 https://x.example/a 。\x07"))
@@ -191,6 +244,8 @@ class GeminiWriterTests(unittest.TestCase):
         body = json.loads(seen[-1].content)
         self.assertEqual("系统", body["systemInstruction"]["parts"][0]["text"])
         self.assertEqual("条目", body["contents"][0]["parts"][0]["text"])
+        self.assertEqual("application/json", body["generationConfig"]["responseMimeType"])
+        self.assertEqual("ARRAY", body["generationConfig"]["responseSchema"]["properties"]["items"]["type"])
 
     def test_discovery_prefers_a_stable_flash_lite_text_model(self):
         posted = []

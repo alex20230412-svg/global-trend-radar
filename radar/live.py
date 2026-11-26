@@ -10,6 +10,7 @@ from .binding import bind_chat, bound_chat_id, confirm_bind
 from .brief import GeminiWriter, UnavailableWriter
 from .delivery import DeliveryError, TelegramClient, reconcile_delivery, send_parts
 from .diagnostics import diagnostic
+from .expiry import token_expiry_notice
 from .pipeline import (
     MYT, collect_slot, deliver, delivery_callbacks, hour, instant, prepare_report,
     utc_now,
@@ -204,7 +205,7 @@ def _send_youtube_supplement(store, execution, report_id, main_status, telegram,
                 sent = "UNKNOWN"
                 # The shared writer lock serializes the existence check and this publish-before-send.
                 sent = send_parts(delivery_id, [message], telegram, lambda _: None, save_attempt,
-                                  retry_rate_limit=False)
+                                  retry_rate_limit=False, silent=True)
     except PublicationError:
         # A failed push can leave local commits ahead of the remote. Do not publish again.
         audit_safe = False
@@ -219,17 +220,25 @@ def _send_youtube_supplement(store, execution, report_id, main_status, telegram,
             pass
 
 
+def _token_notice(env, now):
+    status, notice = token_expiry_notice(env.get("DATA_REPO_TOKEN", ""), now)
+    if status != "no_token":
+        print(f"token_expiry status={status}")
+    return notice
+
+
 def _report(store, sources, approved, env, execution, created, now, schedule_from):
     action = env.get("RADAR_REPORT_ACTION") or "send"
     requested = env.get("RADAR_REPORT_ID", "")
     if env["GITHUB_EVENT_NAME"] == "schedule" and action != "send":
         raise StorageError("report_operation_invalid")
+    notice = _token_notice(env, now) if action in {"send", "preview", "resume"} else None
     if action == "preview":
         # A fresh, separately numbered brief for the Owner to check the format at any time.
         local = now.astimezone(MYT)
         report_id = f"preview-{local:%H%M}-{local.date().isoformat()}"
         parts = prepare_report(store, sources, approved, now, report_id, schedule_from=schedule_from,
-                               writer=_writer(env))
+                               writer=_writer(env), token_notice=notice)
     elif action == "send":
         day = created.astimezone(MYT).date()
         if day != now.astimezone(MYT).date():
@@ -243,7 +252,7 @@ def _report(store, sources, approved, env, execution, created, now, schedule_fro
             raise StorageError("report_before_target")
         report_id = f"{'smoke' if smoke else 'daily'}-{day.isoformat()}"
         parts = prepare_report(store, sources, approved, now, report_id,
-                               target_at=target, schedule_from=schedule_from, writer=_writer(env))
+                               target_at=target, schedule_from=schedule_from, writer=_writer(env), token_notice=notice)
     else:
         if action not in {"resume", "confirm_received", "confirm_unsent"} or not REPORT_ID.fullmatch(requested):
             raise StorageError("report_operation_invalid")

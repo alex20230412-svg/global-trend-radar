@@ -42,13 +42,10 @@ YOUTUBE_PAYLOAD = {
         "ignored": BODY_SENTINEL,
     }]
 }
-GEMINI_TEXT = (
-    "📅 11月27日 热点早报\n"
-    "🔥 马来西亚现在最热门的话题\n"
-    "[m1] 示例马来西亚科技设备：这是用于核对安排行为的合成示例。\n"
-    "⚠️ 天气\n"
-    "本测试使用合成数据，天气和其他栏目均仅用于离线核对原始标题及出处。"
-)
+GEMINI_TEXT = json.dumps({
+    "items": [{"id": "m1", "label": "示例科技设备", "why": "马来西亚科技设备受到关注"}],
+    "ideas": [],
+}, ensure_ascii=False)
 
 
 class JournalStore:
@@ -177,8 +174,12 @@ class YouTubeReportTests(unittest.TestCase):
         self.assertEqual([["SENDING"]], harness.aux_send_states)
         main, supplement = harness.messages
         self.assert_no_youtube_values(main["text"])
-        for marker in (VIDEO_ID, VIDEO_TITLE, CHANNEL_TITLE):
+        for marker in (VIDEO_ID, VIDEO_TITLE, "示例频道甲"):
             self.assertIn(marker, supplement["text"])
+        self.assertNotIn("disable_notification", main)
+        self.assertTrue(supplement["disable_notification"])
+        self.assertIn("<pre>", main["text"])
+        self.assertIn("<blockquote expandable>", supplement["text"])
         self.assertEqual("HTML", supplement["parse_mode"])
         self.assertEqual({"is_disabled": True}, supplement["link_preview_options"])
         self.assertIn("youtube status=ok items=1 sent=SENT", stdout)
@@ -188,6 +189,7 @@ class YouTubeReportTests(unittest.TestCase):
         system = request["systemInstruction"]["parts"][0]["text"]
         prompt = request["contents"][0]["parts"][0]["text"]
         self.assertIn(MAIN_TOPIC, prompt)
+        self.assertEqual("application/json", request["generationConfig"]["responseMimeType"])
         self.assert_no_youtube_values(system + prompt)
 
         for name, data in harness.store.writes:

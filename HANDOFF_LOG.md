@@ -4,6 +4,14 @@
 
 ---
 
+## 2026-11-26 · Codex · Issue #33 PR A 排版与投递
+
+- 从 `eb68437` 开 `codex/brief-v5-layout`，完成任务 1–6。Telegram 表格以 ASCII 固定列加末尾中文显示，详情独立折叠。模型按 JSON、来源条目 ID 和原文数字校验，原文版使用同一排版。自动置顶未纳入。
+- 私有日报 JSON 新增实际展示条目索引，用于对比过去七天已送达日报。YouTube 继续按 D-013 只在当次进程使用视频字段，独立投递启用静音。专用 PAT 到期十四天内仅在私聊页脚显示提醒。
+- 实际运行 `.venv/Scripts/python.exe -X utf8 -m unittest discover -s tests -q`，173 项通过。依赖、编译及差异检查通过。合成早报和 YouTube 各 1 段，分别为 1,376 和 396 个 UTF-16 单元。未调度真实预览或调整 Secrets。 [任务单](https://github.com/alex20230412-svg/global-trend-radar/issues/33)
+
+---
+
 ## 2026-11-26 · Claude · 早报 v5 任务单与来源规则改动
 
 - Owner 看过模拟效果后，确定排版和整批功能。来源规则按 Owner 指示放宽（D-014），并已改写 AGENTS.md。

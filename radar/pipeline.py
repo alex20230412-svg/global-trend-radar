@@ -8,6 +8,7 @@ from html import escape
 from .brief import build_brief
 from .delivery import send_parts, split_parts
 from .diagnostics import diagnostic
+from .history import previous_brief_keys
 from .report import build_report
 from .scoring import trend_key
 from .sources import SourceError, collect_source
@@ -266,7 +267,8 @@ def _coverage(timeline, sources, approved, now):
     return coverage
 
 
-def prepare_report(store, sources, approved, now, report_id, *, target_at=None, schedule_from=None, writer=None):
+def prepare_report(store, sources, approved, now, report_id, *, target_at=None, schedule_from=None,
+                   writer=None, token_notice=None):
     year, month, day = report_id.rsplit("-", 3)[-3:]
     path = f"reports/{year}/{month}/{day}/{report_id}"
     saved = read_json(store, f"{path}.json")
@@ -291,10 +293,13 @@ def prepare_report(store, sources, approved, now, report_id, *, target_at=None, 
     report = build_report(rows, coverage, now=now, target_at=target_at, missed_slots=missed,
                           historical_coverage=historical_coverage)
     # The Owner reads a short Chinese brief; the detailed digest stays in the archive.
-    brief = build_brief(report.snapshot, now, report_id, writer)
+    brief = build_brief(report.snapshot, now, report_id, writer,
+                        previous_keys=previous_brief_keys(store, now.astimezone(MYT).date()),
+                        token_notice=token_notice)
     parts = brief.parts
     store.publish({
         f"{path}.json": json_bytes({"parts": parts, "ranking": report.snapshot, "brief": brief.meta,
+                                    "brief_entries": brief.entries,
                                     "source_ids": sorted({row["source_id"] for row in rows})}),
         f"{path}.md": (report.markdown.rstrip() + "\n").encode(),
         f"health/{year}/{month}/{day}.json": json_bytes(health),

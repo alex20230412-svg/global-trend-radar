@@ -2,7 +2,7 @@
 
 from contextlib import nullcontext
 from dataclasses import dataclass, field
-from html import escape
+from decimal import Decimal
 from itertools import zip_longest
 import json
 from pathlib import Path
@@ -12,7 +12,8 @@ import unicodedata
 import httpx
 import yaml
 
-from .delivery import TELEGRAM_LIMIT, _message_text, _units
+from .delivery import DeliveryError, _message_text
+from .layout import quote_block, table_block, table_header, table_row
 
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "youtube.yaml"
@@ -221,48 +222,50 @@ def fetch_youtube(config, raw_key, *, client=None):
 
 
 def _views(count):
-    if count >= 100_000_000:
-        return f"{count // 100_000_000}亿"
     if count >= 10_000:
-        return f"{count // 10_000}万"
+        return f"{Decimal(count // 1000) / 10:.1f}万"
     return f"{count:,}"
 
 
-def _video_line(number, video):
-    line = f"{number}. {escape(video.title)} — {escape(video.channel_title)}"
-    if video.view_count is not None:
-        line += f" · 观看 {_views(video.view_count)}"
-    return line + f' <a href="{WATCH_URL}{video.video_id}">🔗</a>'
+def _message(groups):
+    sections = [HEADER]
+    tables, details = [], []
+    for group, videos in groups.items():
+        if not videos:
+            continue
+        rows = []
+        for number, video in enumerate(videos, 1):
+            views = _views(video.view_count) if video.view_count is not None else "—"
+            rows.append(table_row(number, views, video.channel_title, metric_width=10))
+            details.append((f"{group} {number}. {video.title}", WATCH_URL + video.video_id))
+        tables.append((group, table_header("观看", "频道", metric_width=10), rows))
+    if tables:
+        sections.append(table_block(tables)[0])
+        sections.append(quote_block(
+            "完整标题和链接（点开看）", details, row_units=None, preserve_spaces=True,
+        )[0])
+    sections.append(FOOTER)
+    return "\n\n".join(sections)
 
 
 def render_youtube(videos):
     """Keep complete entries and reserve space for the policy links in a single message."""
     by_group = {group: [] for group in GROUPS}
-    lines = {group: [] for group in GROUPS}
+    selected = {group: [] for group in GROUPS}
     for video in videos:
         by_group[video.group].append(video)
 
-    budget = TELEGRAM_LIMIT - _units(_message_text(f"{HEADER}\n\n{FOOTER}"))
     # Allocate the first entries of each group before filling later entries.
     full_groups = set()
     for batch in zip_longest(*by_group.values()):
         for group, video in zip(GROUPS, batch, strict=True):
             if video is None or group in full_groups:
                 continue
-            group_lines = lines[group]
-            row = _video_line(len(group_lines) + 1, video)
-            overhead = 1 if group_lines else 3 + _units(group)
-            cost = overhead + _units(_message_text(row))
-            if cost <= budget:
-                group_lines.append(row)
-                budget -= cost
-            else:
+            selected[group].append(video)
+            try:
+                _message_text(_message(selected))
+            except DeliveryError:
+                selected[group].pop()
                 # The following entries in this group must not overtake this one.
                 full_groups.add(group)
-
-    sections = [HEADER]
-    for group, entries in lines.items():
-        if entries:
-            sections.append("\n".join((group, *entries)))
-    sections.append(FOOTER)
-    return "\n\n".join(sections)
+    return _message(selected)

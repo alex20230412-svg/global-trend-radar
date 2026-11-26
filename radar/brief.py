@@ -438,25 +438,29 @@ class GeminiWriter:
         return (text, "ok") if text.strip() else (None, "empty_output")
 
     def write(self, system, prompt):
-        status = "no_model"
+        """Try each model in turn; a timeout or error on one falls through to the next."""
+        status, last, tried, missing = "no_model", None, [], False
         try:
             with self._client() as client:
-                tried = []
-                for model in self._models:
-                    tried.append(model)
-                    text, status = self._generate(client, model, system, prompt)
-                    if text is not None:
-                        return text, status, model
-                    if status not in {"http_404", "http_400"}:
-                        return None, status, model
-                for model in self._discover(client):
+                queue = list(self._models)
+                while queue:
+                    model = queue.pop(0)
                     if model in tried:
                         continue
-                    text, status = self._generate(client, model, system, prompt)
+                    tried.append(model)
+                    try:
+                        text, status = self._generate(client, model, system, prompt)
+                    except httpx.HTTPError as error:
+                        text, status = None, f"network_{type(error).__name__}"[:48]
+                    last = model
                     if text is not None:
                         return text, status, model
-                    if status not in {"http_404", "http_400"}:
-                        return None, status, model
+                    if status in {"http_401", "http_403"}:
+                        return None, status, model  # the key itself is refused; other models will be too
+                    missing = missing or status in {"http_404", "http_400"}
+                    if not queue and missing:
+                        missing = False
+                        queue = [name for name in self._discover(client) if name not in tried]
         except httpx.HTTPError as error:
-            return None, f"network_{type(error).__name__}"[:48], None
-        return None, status, None
+            return None, f"network_{type(error).__name__}"[:48], last
+        return None, status, last

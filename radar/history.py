@@ -8,7 +8,8 @@ from .sources import clean_url
 from .storage import read_json
 
 
-BRIEF_SECTIONS = {"malaysia", "global", "china", "wiki", "music", "apps"}
+BRIEF_SECTIONS = {"malaysia", "global", "china", "wiki", "music", "apps",
+                  "cn_tv", "cn_movie", "cn_novel", "cn_music", "cn_apps"}
 
 
 def _daily_payload(store, day):

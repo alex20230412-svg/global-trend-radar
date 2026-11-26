@@ -261,6 +261,38 @@ class BriefTests(unittest.TestCase):
         self.assertNotIn("Hoofdpagina", plain)
         self.assertIn("A. Samad Said", plain)
 
+    def test_china_goes_in_its_own_message_with_popular_charts(self):
+        snapshot = {
+            "malaysia": [{"title": "合成话题", "url": "https://example.org/a"}],
+            "china": [{"title": "合成微博话题", "url": "https://s.weibo.com/weibo?q=x", "source_label": "微博"}],
+            "charts": {
+                "baidu_teleplay": [{"title": "合成剧甲", "artist": "中国大陆 | 古装", "volume_raw": "95471",
+                                    "url": "https://m.baidu.com/s?word=a"}],
+                "baidu_movie": [{"title": "合成电影", "volume_raw": "1060000", "url": "https://m.baidu.com/s?word=b"}],
+                "apple_music_cn": [{"title": "合成中文歌", "artist": "合成歌手", "url": "https://example.org/m"}],
+                "app_store_cn": [{"title": "合成短剧", "genre": "Entertainment", "url": "https://example.org/p"}],
+            },
+        }
+        writer = FakeWriter(json.dumps({"items": [
+            {"id": "m1", "label": "合成话题", "why": "合成原因"},
+            {"id": "c1", "label": "网民热议话题", "why": "合成讨论"},
+            {"id": "p1", "label": "短剧", "why": "看短剧的应用"},
+        ], "ideas": []}, ensure_ascii=False))
+        brief = build_brief(snapshot, NOW, "smoke-2026-11-27", writer)
+        main = "".join(_message_text(part) for part in brief.parts)
+        china = "".join(_message_text(part) for part in brief.china_parts)
+        self.assertNotIn("中国热议", main)
+        self.assertNotIn("合成剧甲", main)
+        for expected in ("🇨🇳 中国在流行", "网民热议话题（微博）", "📺 热门电视剧", "95K  合成剧甲",
+                         "1.1M  合成电影", "合成中文歌 — 合成歌手", "合成短剧 · 短剧", "smoke-2026-11-27-china"):
+            self.assertIn(expected, china)
+        payload = json.loads(writer.calls[0][1])
+        self.assertNotIn("cn_tv", payload)
+        self.assertIn("cn_apps", payload)
+        self.assertIn("cn_tv", {row["section"] for row in brief.entries})
+        empty = build_brief({"malaysia": [{"title": "合成话题", "url": "https://example.org/a"}]}, NOW, "smoke-2026-11-27")
+        self.assertEqual([], empty.china_parts)
+
     def test_cross_section_alias_urls_and_wiki_adult_filter(self):
         snapshot = {
             "malaysia": [{"title": "新电影", "url": "https://example.org/movie?utm_source=first"}],
@@ -276,13 +308,14 @@ class BriefTests(unittest.TestCase):
         brief = build_brief(snapshot, NOW, "smoke-2026-11-27")
         plain = _message_text(brief.parts[0])
         self.assertIn("12K", plain)
-        self.assertIn("合成中国话题（微博）", plain)
+        self.assertNotIn("合成中国话题", plain)  # China has its own message since 2026-11-27.
+        self.assertIn("合成中国话题（微博）", _message_text(brief.china_parts[0]))
         for denied in ("热门的电影", "成人影片"):
             self.assertNotIn(denied, plain)
         table = brief.parts[0].split("<pre>", 1)[1].split("</pre>", 1)[0]
         self.assertNotIn("<a", table)
         self.assertTrue(all(table_width(line) <= 28 for line in table.splitlines()))
-        self.assertEqual(["malaysia", "global", "china", "wiki"], [row["section"] for row in brief.entries])
+        self.assertEqual(["malaysia", "global", "wiki", "china"], [row["section"] for row in brief.entries])
 
     def test_sanitize_strips_links_markdown_and_controls(self):
         self.assertEqual("标题\n\n正文 。", sanitize("## **标题**\n\n\n\n正文 https://x.example/a 。\x07"))

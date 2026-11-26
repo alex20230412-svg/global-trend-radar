@@ -333,12 +333,20 @@ def prepare_report(store, sources, approved, now, report_id, *, target_at=None, 
     parts = brief.parts
     store.publish({
         f"{path}.json": json_bytes({"parts": parts, "ranking": report.snapshot, "brief": brief.meta,
-                                    "brief_entries": brief.entries,
+                                    "brief_entries": brief.entries, "china_parts": brief.china_parts,
                                     "source_ids": sorted({row["source_id"] for row in rows})}),
         f"{path}.md": (report.markdown.rstrip() + "\n").encode(),
         f"health/{year}/{month}/{day}.json": json_bytes(health),
     }, "Archive private radar report")
     return parts
+
+
+def china_parts(store, report_id):
+    """The separate China message saved with a daily or preview report; [] when there is none."""
+    year, month, day = report_id.rsplit("-", 3)[-3:]
+    saved = read_json(store, f"reports/{year}/{month}/{day}/{report_id}.json")
+    parts = saved.get("china_parts") if isinstance(saved, dict) else None
+    return parts if isinstance(parts, list) and all(isinstance(part, str) for part in parts) else []
 
 
 def delivery_callbacks(store):

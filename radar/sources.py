@@ -26,6 +26,7 @@ from .source_http import CONNECT_TIMEOUT, GDELT_HOST, GITHUB_ARCHIVE_HOST, WEIBO
 DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "config" / "sources.yaml"
 KINDS = {"trends", "news", "hn", "bluesky", "mastodon", "weather", "gdelt", "chart", "wiki", "china"}
 HOURLY_SINGLE_READ_KINDS = {"wiki", "china"}
+WEIBO_ARCHIVE_MAX_AGE = timedelta(hours=48)
 GEOS = {"MY", "SG", "ID", "TH", "PH", "VN", "US", "GB", "IN", "JP", "KR", "TW", "HK", "AU"}
 TREND_URL = "https://trends.google.com/trending/rss?geo="
 WEATHER_LINK = "https://www.met.gov.my/en/"
@@ -100,11 +101,12 @@ class Source:
 class SourceItems(list):
     """Usable observations, malformed input count, and optional source metadata."""
 
-    def __init__(self, rows=(), *, skipped=0, data_day=None, fallback=False):
+    def __init__(self, rows=(), *, skipped=0, data_day=None, fallback=False, archive_updated_at=None):
         super().__init__(rows)
         self.skipped = skipped
         self.data_day = data_day
         self.fallback = fallback
+        self.archive_updated_at = archive_updated_at
 
 
 class MalformedItem(SourceError):
@@ -621,7 +623,7 @@ def _weibo_archive(source, http, now):
     modified = _iso(http.last_modified)
     if not modified or (stamp := datetime.fromisoformat(modified)) > now + timedelta(minutes=5):
         raise SourceError("archive_freshness_unavailable")
-    if now - stamp > timedelta(hours=48):
+    if now - stamp > WEIBO_ARCHIVE_MAX_AGE:
         raise SourceError("archive_stale")
 
     def parse_item(rank, raw):
@@ -640,7 +642,9 @@ def _weibo_archive(source, http, now):
         url = f"https://s.weibo.com/weibo?{urlencode({'q': query})}"
         return _observation(source, entry.get("title"), url, rank, published_at=modified)
 
-    return _item_rows(_list(_json(body))[:30], parse_item)
+    rows = _item_rows(_list(_json(body))[:30], parse_item)
+    rows.archive_updated_at = modified
+    return rows
 
 
 def _china_news_link(url):
@@ -686,4 +690,5 @@ def collect_source(source, http=None):
     unique = {}
     for row in rows:
         unique.setdefault(row["content_id"], row)
-    return SourceItems(unique.values(), skipped=rows.skipped, data_day=rows.data_day, fallback=rows.fallback)
+    return SourceItems(unique.values(), skipped=rows.skipped, data_day=rows.data_day,
+                       fallback=rows.fallback, archive_updated_at=rows.archive_updated_at)

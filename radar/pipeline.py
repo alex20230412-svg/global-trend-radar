@@ -11,7 +11,7 @@ from .diagnostics import diagnostic
 from .history import previous_brief_keys
 from .report import build_report
 from .scoring import trend_key
-from .sources import HOURLY_SINGLE_READ_KINDS, SourceError, collect_source
+from .sources import HOURLY_SINGLE_READ_KINDS, WEIBO_ARCHIVE_MAX_AGE, SourceError, collect_source
 from .storage import WARN_KIB, StorageError, archive_rows, json_bytes, read_json, read_observations
 
 
@@ -20,6 +20,7 @@ MYT = timezone(timedelta(hours=8))
 HOUR = timedelta(hours=1)
 GOOD = {"ok", "empty"}
 CORE = {"trends", "news"}
+WEIBO_FRESHNESS_KEY = "health/sources/weibo_archive.json"
 SOURCE_ERROR_CODES = {
     "dns_error", "private_address_blocked", "url_blocked", "host_backoff", "robots_invalid",
     "robots_denied", "robots_rate_unsupported", "response_encoding", "network_error",
@@ -96,6 +97,8 @@ def _collect_one(source, fetch, clock):
     }
     if data_day := getattr(items, "data_day", None):
         state.update(data_day=data_day, fallback=items.fallback)
+    if archive_updated_at := getattr(items, "archive_updated_at", None):
+        state["archive_updated_at"] = archive_updated_at
     return state, list(distinct.values()), None
 
 
@@ -162,11 +165,21 @@ def collect_slot(store, sources, approved, start, execution, *, planned_at=None,
                 new_claims.add(source.id)
     if new_claims:
         store.publish({claim_key: json_bytes(sorted(claims | new_claims))}, "Reserve hourly source requests")
-    rows, diagnostics = [], []
+    rows, diagnostics, files = [], [], {}
     with ThreadPoolExecutor(max_workers=5) as pool:
         futures = {source.id: pool.submit(_collect_one, source, fetch, clock) for source in pending}
         for source_id, future in futures.items():
-            states[source_id], items, failure = future.result()
+            state, items, failure = future.result()
+            if source_id == "weibo_archive":
+                last_update = (read_json(store, WEIBO_FRESHNESS_KEY) or {}).get("updated_at")
+                updated = state.get("archive_updated_at")
+                if updated and (not last_update or instant(updated) > instant(last_update)):
+                    files[WEIBO_FRESHNESS_KEY] = json_bytes({"updated_at": updated})
+                elif (state.get("reason") == "http_404" and last_update
+                      and started - instant(last_update) > WEIBO_ARCHIVE_MAX_AGE):
+                    # A dated file can be absent before the first update of a day.
+                    state.update(status="stale", reason="archive_stale")
+            states[source_id] = state
             rows.extend(items)
             if failure is not None:
                 diagnostics.append(failure)
@@ -174,7 +187,6 @@ def collect_slot(store, sources, approved, start, execution, *, planned_at=None,
     for row in rows:
         row["slot"] = start.isoformat()
         row["run_id"] = run_id
-    files = {}
     rows.sort(key=lambda row: row["observed_at"])
     _remember_first_seen(store, rows, files)
     archive = archive_rows(prior_rows + rows)

@@ -4,6 +4,13 @@
 
 ---
 
+## 2026-11-26 · Codex · Issue #33 PR B 来源
+
+- B 接在 A 上，完成任务 7–8。维基榜使用带联系方式的 User-Agent 和两级日期选择。复用现有小时采集、RSS、排行和私有归档。GitHub 只读凭证只用于固定存档请求。小时槽预留标记保护重跑，跨小时仍保留观测。
+- Windows 实际运行 `.venv/Scripts/python.exe -X utf8 -m unittest discover -s tests -q`，185 项通过。合成日报含两个新栏目。公开探查的实际状态和舍弃候选的原因见来源文档。合并获批后补真实 live-check、耗时及私库每小时增量。新增费用 RM0。 [来源核查](docs/sources.md#早报-v5-新来源核查d-014)
+
+---
+
 ## 2026-11-26 · Codex · Issue #33 PR A 排版与投递
 
 - 从 `eb68437` 开 `codex/brief-v5-layout`，完成任务 1–6。Telegram 表格以 ASCII 固定列加末尾中文显示，详情独立折叠。模型按 JSON、来源条目 ID 和原文数字校验，原文版使用同一排版。自动置顶未纳入。

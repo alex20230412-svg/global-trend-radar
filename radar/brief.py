@@ -42,6 +42,7 @@ SOURCE_NAMES = {
     "fmt": "Free Malaysia Today", "bernama": "马新社", "hn": "Hacker News", "bluesky": "Bluesky",
     "mastodon_tags": "Mastodon 标签", "mastodon_links": "Mastodon 链接", "weather": "大马气象局",
     "gdelt": "GDELT", "apple_music_my": "Apple Music 榜", "app_store_my": "App Store 榜",
+    "wikipedia_my": "马来西亚维基百科", "weibo_archive": "微博存档", "chinanews_rss": "中新网",
 }
 SYSTEM_PROMPT = """你为马来西亚华人编辑中文热点早报。只返回 JSON 对象 items 和 ideas。
 items 的每行包含原样 id、label、why。label 是最多 8 个中文字的主题，why 是一句简体中文原因。
@@ -273,6 +274,12 @@ def _footer(snapshot):
     line = f"ℹ️ 数据来源 {len(good)}/{len(active)} 个正常"
     if problems:
         line += "；暂时没有数据：" + "、".join(problems[:6]) + ("等" if len(problems) > 6 else "")
+    for source in good:
+        day = source.get("data_day")
+        if (source.get("source_id") == "wikipedia_my" and source.get("fallback")
+                and isinstance(day, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", day)):
+            line += f"\n维基百科采用 {day} 的马来西亚浏览榜"
+            break
     return line
 
 

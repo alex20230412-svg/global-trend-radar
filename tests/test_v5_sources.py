@@ -236,6 +236,22 @@ class SourceHistoryTests(TestCase):
         state, = pipeline._coverage(timeline, [WEIBO], {WEIBO.id}, NOW)
         self.assertEqual((state["status"], state["reason"]), ("error", "http_404"))
 
+    def test_missing_archive_turns_stale_after_last_verified_update_ages_out(self):
+        store = MemoryStore()
+        updated = NOW - timedelta(hours=49)
+        self.collect(store, [WEIBO], lambda _: sources.SourceItems(archive_updated_at=updated.isoformat()),
+                     now=updated)
+
+        def missing(_):
+            raise sources.SourceError("http_404", http_status=404)
+
+        boundary = self.collect(store, [WEIBO], missing, "test-at-48h", updated + timedelta(hours=48))
+        self.assertEqual(boundary["sources"][WEIBO.id]["reason"], "http_404")
+        stale = self.collect(store, [WEIBO], missing, "test-after-48h", NOW)
+        self.assertEqual((stale["sources"][WEIBO.id]["status"], stale["sources"][WEIBO.id]["reason"]),
+                         ("stale", "archive_stale"))
+        self.assertEqual(stale["row_count"], 0)
+
     def test_public_check_redacts_confirmed_archive_stale_and_uses_no_retry(self):
         store = MemoryStore()
         summary = []

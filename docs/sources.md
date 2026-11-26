@@ -54,6 +54,7 @@ GDELT 在全部 5 次运行中都连不上（诊断为 `ConnectTimeout`，8 秒�
 | `apple_music_my` | `rss.marketingtools.apple.com/api/v2/my/music/most-played/25/songs.json` | Apple 官方 Marketing Tools 榜单，不需要 key。robots.txt 只有一行注释，没有规则（Claude 2026-11-26 核查）。只存排名、歌名、歌手、类型和链接，不存封面图。live-check [45772752652](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45772752652)：`ok`，25 条 |
 | `app_store_my` | `rss.marketingtools.apple.com/api/v2/my/apps/top-free/25/apps.json` | 同上。Claude 15:00 前后用浏览器访问曾返回 502/504，live-check 时已恢复：`ok`，25 条 |
 | YouTube 马来西亚热门（已实现、待启用） | YouTube Data API `videos.list?chart=mostPopular&regionCode=MY` | D-013。自 2025-07-21 起榜单条目来自热门音乐、电影和游戏榜。视频元数据只用于当次私聊发送，系统不存储。默认关闭，等待审核、Owner 设置密钥及真实预览。 [变更记录](https://developers.google.com/youtube/data/revision_history#july-10-2025) · [功能说明](youtube.md) |
+
 ## 早报 v5 新来源核查（D-014）
 
 2026-11-26 22:42 MYT 核查了公开政策、robots 和一轮有限的公开端点样本。下列 HTTP 状态和数量来自这次公开探查。Draft PR 的新代码尚未合并，现有 `main` 的 live-check 不含这些适配器，L4 实测留给合并后。 [Issue #33](https://github.com/alex20230412-svg/global-trend-radar/issues/33)
@@ -68,3 +69,7 @@ GDELT 在全部 5 次运行中都连不上（诊断为 `ConnectTimeout`，8 秒�
 | 中新网 `chinanews_rss` | 官网公开 RSS。主机 robots 通用组允许根路径。本轮 RSS HTTP 200，30 条 RSS 记录。 | 启用，复用 RSS 解析，只保存标题、规范链接和时间，链接限定在发布方主机。 [官方 RSS](https://www.chinanews.com.cn/rss/scroll-news.xml) · [robots.txt](https://www.chinanews.com.cn/robots.txt) |
 
 新来源在生产小时槽先写入一次探测标记，成功或失败均不在同一小时重复；维基百科只在前一天无数据时试备用日期。GitHub 存档仅在固定 Contents API 路径使用 Actions 只读凭证。上游失败和存档停更通过来源状态表达，真实响应及条目原文不出现在公开 Actions 日志。
+
+2026-11-26 复核 `api.github.com/robots.txt` 返回 404。存档当天文件缺失时，用最近经响应头验证的更新时刻判断是否超过 48 小时。首次部署没有已验证时刻时，只报告当天数据缺失。 [GitHub API robots.txt](https://api.github.com/robots.txt)
+
+合并后获批运行 `Radar live check` 时，安排在定时采集尚未启用的窗口，避免临时测试存储和生产存储各自读取同一来源。记录三源状态、条目数与耗时。获批用真实存储采集后，再记录私库的每小时增量。此处的 HTTP 样本不能替代这两项验收。

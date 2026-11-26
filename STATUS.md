@@ -1,6 +1,26 @@
 # STATUS
 
-最后更新 2026-11-26 MYT，Codex。
+最后更新 2026-11-27 MYT，Claude。
+
+## 早报 v5 · 已上线 main，真实预览通过（2026-11-27 00:00 MYT）
+
+- Owner 授权：「1.合并 2.你自己试看 3.先放着 4.做好了就打开」。Claude 审核后合并 #35、#36、#37，之后又补了 #38–#42：
+  - #38：百度热搜；重定向诊断标签。
+  - #39：跟随维基的 robots.txt 重定向。
+  - #40、#41：按真实预览修正 AI 标签、歌名原文、App 短用途、天气中文、维基首页排除。
+  - #42：Gemini 繁忙时等 30 秒再试一次。
+- main 上的 live-check [45848775026](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45848775026) 全部通过。新来源结果：
+  - `wikipedia_my`：17 条
+  - `weibo_archive`：30 条
+  - `chinanews_rss`：30 条
+  - `baidu_hot`：30 条
+- 真实预览已发到私聊：`preview-2327`、`preview-2330`、`preview-2334`、`weekly-preview-2331`。
+  - `preview-2330`：AI 模式，30/30 来源正常，YouTube 18 条静音发送。
+  - `preview-2334`：Gemini 返回 503，退回原文版，因此加了 #42 的重试。
+  - 钥匙到期检查：`token_expiry status=ok`（响应头解析成功，离到期超过 14 天）。
+- 暂缓：知乎（找不到还在更新的存档）。不接：B站（API 的 robots.txt 写着 `Disallow: /`）。
+- 🆕 和周报要等每天自动发送开启后才开始累积数据。
+- **待办**：`RADAR_STAGE` 改为 `c-scheduled`。变量接口被代理挡住，Claude 改不了，要 Owner 在 GitHub 页面改。
 
 ## 早报 v5 · C 周日热点周报（2026-11-26）
 

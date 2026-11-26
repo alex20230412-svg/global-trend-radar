@@ -208,7 +208,7 @@ class IsolationTests(unittest.TestCase):
         job = spec["jobs"]["keepalive"]
         self.assertIn("vars.RADAR_STAGE == 'c-scheduled'", job["if"])
         self.assertNotIn("secrets.", workflow)
-        self.assertNotIn("checkout", workflow)
+        self.assertTrue(all("uses" not in step for step in job["steps"]))  # no checkout or third-party action
         self.assertNotIn("environment", job)
         for name in ("collect.yml", "report.yml", "keepalive.yml"):
             self.assertIn(name, workflow)

@@ -2,6 +2,15 @@
 
 最后更新 2026-11-26 MYT，Claude。
 
+## 早报 v5 · 已派给 Codex（2026-11-26）
+
+- Owner 确定整批改动（D-014），任务单见 [Issue #33](https://github.com/alex20230412-svg/global-trend-radar/issues/33)：
+  - 等宽表格加折叠区，🆕 新上榜，YouTube 静音；
+  - 周日周报，私库钥匙到期提醒，修跨栏重复和 AI 编造细节；
+  - 维基百科（马来西亚），中国热议。
+- 来源规则已改：公开、不需登录的来源都可以用，底线是不破解反爬机制、不直接读 robots.txt 禁止的网站。
+- 流程：Codex 分 3 个 PR 提交，Claude 审核合并，发预览给 Owner 确认。
+
 ## YouTube 热门 · 已启用，真实预览通过（2026-11-26）
 
 - 按 D-013 接入官方 YouTube Data API 马来西亚 `mostPopular`。条目来自音乐、电影和游戏榜。主早报送达后独立发送一条，视频元数据只在当次进程使用，不进入归档、公开日志或 Gemini。 [Issue #28](https://github.com/alex20230412-svg/global-trend-radar/issues/28) · [功能说明](docs/youtube.md)

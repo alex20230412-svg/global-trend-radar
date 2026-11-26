@@ -4,6 +4,19 @@
 
 ---
 
+## 2026-11-26 · Claude · 早报 v5 任务单与来源规则改动
+
+- Owner 看过模拟效果后，确定排版和整批功能。来源规则按 Owner 指示放宽（D-014），并已改写 AGENTS.md。
+- 核查：
+  - Apple 中国区歌曲榜和 App 榜读得到，但 Owner 不要；
+  - 微博、知乎的 robots.txt 禁止读取；百度规则从这里读不到；B站规则大部分允许；
+  - 36氪 RSS 一个月没更新；中新网 RSS 正常；
+  - Spotify 自 2024-11 起不开放官方编辑歌单；TikTok 研究接口只给学术机构。
+- 写成 Codex 任务单 [Issue #33](https://github.com/alex20230412-svg/global-trend-radar/issues/33)，分 3 个 PR。
+- 下一步：Codex 开发 → Claude 审核 → 预览 → Owner 确认。仍等 Owner 把 `RADAR_STAGE` 改为 `c-scheduled`。
+
+---
+
 ## 2026-11-26 · Claude · YouTube 启用并实测
 
 - Owner 20:12 MYT 告知 `YOUTUBE_API_KEY` 已填。PR #31 把 `enabled` 改为 `true`，CI 通过后合并。

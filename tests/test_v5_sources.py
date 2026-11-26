@@ -71,8 +71,8 @@ class SourceAdapterTests(TestCase):
                     return httpx.Response(302, headers={"Location": "https://www.wikimedia.org/robots.txt"})
                 if request.headers["Host"] == "www.wikimedia.org":
                     return (httpx.Response(404) if www_robots == 404
-                            else httpx.Response(200, content=b"User-agent: *\nDisallow: /api/\n"))
-                return httpx.Response(200, content=b"{}")
+                            else httpx.Response(200, stream=httpx.ByteStream(b"User-agent: *\nDisallow: /api/\n")))
+                return httpx.Response(200, stream=httpx.ByteStream(b"{}"))
 
             http = self.transport(fake)
             with self.subTest(www_robots=www_robots):

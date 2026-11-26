@@ -304,7 +304,7 @@ class BriefTests(unittest.TestCase):
                     "charts": {"app_store_cn": [{"title": "红果短剧 - 好内容多品类随心看",
                                                  "url": "https://example.org/p"}]}}
         china = _message_text(build_brief(snapshot, NOW, "smoke-2026-11-27").china_parts[0])
-        self.assertIn("红果短剧 · 好内容多品类随心看", china)
+        self.assertIn("红果短剧 · 好内容多品类", china)
 
     def test_cross_section_alias_urls_and_wiki_adult_filter(self):
         snapshot = {

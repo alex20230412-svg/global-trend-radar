@@ -427,7 +427,8 @@ class HttpTests(unittest.TestCase):
             {"name": "App B", "artistName": "Dev", "url": "https://apps.apple.com/my/app/b/id1",
              "genres": [{"name": "Finance"}]},
         ]}}).encode()
-        rows = _chart(self.sources["apple_music_my"], body)
+        source = next(item for item in load_sources() if item.id == "apple_music_my")
+        rows = _chart(source, body)
         self.assertEqual(1, rows.skipped)
         self.assertEqual([("Song A", 1, "Singer", "Pop"), ("App B", 3, "Dev", "Finance")],
                          [(row["title"], row["rank"], row["artist"], row["genre"]) for row in rows])

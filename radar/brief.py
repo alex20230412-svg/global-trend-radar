@@ -375,6 +375,69 @@ class UnavailableWriter:
         self.reason = reason
 
     def write(self, system, prompt):
+        return None, self.reason, None
+
+
+class GeminiWriter:
+    """Minimal Gemini generateContent client. Errors are reported as fixed status codes only."""
+
+    def __init__(self, key, *, transport=None, models=GEMINI_MODELS, timeout=90.0):
+        key = key.strip() if isinstance(key, str) else key
+        if not isinstance(key, str) or not GEMINI_KEY.fullmatch(key):
+            raise ValueError("invalid_gemini_key")
+        self._key = key
+        self._transport = transport
+        self._models = tuple(models)
+        self._timeout = timeout
+
+    def _client(self):
+        return httpx.Client(transport=self._transport, timeout=httpx.Timeout(self._timeout, connect=10.0),
+                            trust_env=False, follow_redirects=False)
+
+    def _headers(self):
+        return {"x-goog-api-key": self._key, "Content-Type": "application/json"}
+
+    def _discover(self, client):
+        try:
+            response = client.get(f"{GEMINI_BASE}/models", params={"pageSize": 200}, headers=self._headers())
+            if response.status_code != 200:
+                return []
+            models = response.json().get("models", [])
+        except (httpx.HTTPError, ValueError, AttributeError):
+            return []
+        names = []
+        for model in models if isinstance(models, list) else []:
+            if not isinstance(model, dict) or "generateContent" not in (model.get("supportedGenerationMethods") or []):
+                continue
+            name = str(model.get("name", "")).removeprefix("models/")
+            if not re.fullmatch(r"gemini-[a-z0-9.-]{1,60}", name) or "flash" not in name:
+                continue
+            if any(word in name for word in ("tts", "live", "image", "audio", "embedding", "transcribe",
+                                              "robotics", "omni", "exp")):
+                continue
+            names.append(name)
+        stable = [name for name in names if "preview" not in name]
+        ordered = sorted(stable or names, key=lambda name: ("lite" not in name, [-ord(c) for c in name]))
+        return ordered[:3]
+
+    def _generate(self, client, model, system, prompt):
+        body = {
+            "systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 8192},
+        }
+        response = client.post(f"{GEMINI_BASE}/models/{model}:generateContent", json=body, headers=self._headers())
+        if response.status_code != 200:
+            return None, f"http_{response.status_code}"
+        try:
+            candidates = response.json().get("candidates") or []
+            parts = candidates[0]["content"]["parts"]
+            text = "".join(part.get("text", "") for part in parts if isinstance(part, dict) and not part.get("thought"))
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+            return None, "invalid_response"
+        return (text, "ok") if text.strip() else (None, "empty_output")
+
+    def write(self, system, prompt):
         """Try each model in turn; a timeout or error on one falls through to the next."""
         status, last, tried, missing = "no_model", None, [], False
         try:

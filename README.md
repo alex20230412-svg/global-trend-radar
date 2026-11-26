@@ -2,16 +2,18 @@
 
 Free automated trending-topic radar for Malaysia and the world.
 
-全球热点雷达：自动、持续收集马来西亚和全球的最新热门资讯，找出社交媒体上刚开始爆红、正在快速升温的话题，保存历史以便比较热度变化，并通过 Telegram 推送日报和升温提醒。
+全球热点雷达收集马来西亚及监测地区的搜索飙升、本地媒体和社交科技信号，保存小时观测，生成 08:30 MYT 私人 Telegram 日报。报告包含热门榜、新出现及升温、社交科技、气象和覆盖缺口。
 
-> **当前状态：阶段 0（准备）。** 还没有任何代码在运行。详见 [STATUS.md](STATUS.md)。
+> **当前状态为阶段 A 离线开发交付。** 等待 Claude 独立审核与 Owner 批准阶段 B。定时触发尚未启用。 [状态](STATUS.md)
 
 ## 先读这些
 
 | 文件 | 内容 |
 | --- | --- |
-| [docs/PLAN.md](docs/PLAN.md) | 调查报告与实施方案（2026-11-25） |
+| [docs/PLAN.md](docs/PLAN.md) | 早期调查与长期方案，第一轮范围见 D-009 及 Issue #6 审核 |
 | [docs/sources.md](docs/sources.md) | 数据来源证据表：每个来源的状态、实测证据、限制 |
+| [docs/opensource.md](docs/opensource.md) | 开源候选、锁定版本、许可证和复用记录 |
+| [docs/operations.md](docs/operations.md) | 凭证、首次手动运行、调度验收及恢复步骤 |
 | [STATUS.md](STATUS.md) | 当前阶段、已完成、待办、阻塞 |
 | [DECISIONS.md](DECISIONS.md) | 已确认和待讨论的决定 |
 | [PROJECT_MEMORY.md](PROJECT_MEMORY.md) | 不会变的目标与约束 |
@@ -31,9 +33,20 @@ Free automated trending-topic radar for Malaysia and the world.
 | 仓库 | 可见性 | 放什么 |
 | --- | --- | --- |
 | `global-trend-radar`（本仓库） | 公开 | 代码、配置、文档、讨论 |
-| `global-trend-radar-data` | 私有 | 采集到的数据（原始数据放 Releases，小型汇总放 Git） |
+| `global-trend-radar-data` | 私有 | 获准长期保存的小时观测、报告、投递流水和健康记录 |
 
 本仓库是公开的，任何人都能看到。**不要在这里提交任何密码、Token、私人资料或其他项目的信息。** Token 只放在 GitHub Secrets。
+
+## 本地离线测试
+
+在 Linux x64 或 Windows x64 使用 Python 3.14，在项目的虚拟环境执行以下命令。测试使用合成样本或 Mock，并用临时本地 Git 仓库验证写入竞争。
+
+```bash
+python -m pip --isolated --disable-pip-version-check install --no-cache-dir --index-url https://pypi.org/simple --require-hashes --only-binary=:all: -r requirements.lock
+python -m unittest discover -s tests -v
+```
+
+阶段 A 默认关闭真实入口。后续独立批准时，按运行手册在公开代码仓库的 `radar-live` 环境设置 Secrets。 [运行手册](docs/operations.md)
 
 ## 怎么参与讨论
 

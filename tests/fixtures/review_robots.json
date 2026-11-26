@@ -1,0 +1,53 @@
+{
+  "review": "https://github.com/alex20230412-svg/global-trend-radar/pull/7#issuecomment-7168526931",
+  "provenance": "The reviewer reported target allowance for all nine hosts and quoted the HN path rules, two crawl-delay values, and MET's 404. This file models those facts for MockTransport. It contains no downloaded robots.txt bodies. Mock User-agent groups and additional Allow lines are not verbatim origin content.",
+  "cases": {
+    "trends.google.com": {
+      "source_id": "trends_my",
+      "robots_status": 200,
+      "body": "User-agent: *\nAllow: /trending/rss\n"
+    },
+    "www.malaysiakini.com": {
+      "source_id": "malaysiakini",
+      "robots_status": 200,
+      "body": "User-agent: *\nAllow: /rss/en/news.rss\nCrawl-delay: 1\n",
+      "minimum_interval": 1
+    },
+    "www.malaymail.com": {
+      "source_id": "malay_mail",
+      "robots_status": 200,
+      "body": "User-agent: *\nAllow: /feed/rss/malaysia\n"
+    },
+    "cms.freemalaysiatoday.com": {
+      "source_id": "fmt",
+      "robots_status": 200,
+      "body": "User-agent: *\nAllow: /feed\n"
+    },
+    "www.bernama.com": {
+      "source_id": "bernama",
+      "robots_status": 200,
+      "body": "User-agent: *\nAllow: /en/rssfeed.php\nCrawl-delay: 1\n",
+      "minimum_interval": 1
+    },
+    "hacker-news.firebaseio.com": {
+      "source_id": "hn",
+      "robots_status": 200,
+      "body": "User-agent: *\nAllow: /*.json$\nDisallow: /\n"
+    },
+    "public.api.bsky.app": {
+      "source_id": "bluesky",
+      "robots_status": 200,
+      "body": "User-agent: *\nAllow: /xrpc/app.bsky.unspecced.getTrendingTopics\n"
+    },
+    "mastodon.social": {
+      "source_id": "mastodon_tags",
+      "robots_status": 200,
+      "body": "User-agent: *\nAllow: /api/v1/trends/tags\nAllow: /api/v1/trends/links\n"
+    },
+    "api.data.gov.my": {
+      "source_id": "weather",
+      "robots_status": 404,
+      "body": ""
+    }
+  }
+}

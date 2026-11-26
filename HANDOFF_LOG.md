@@ -4,6 +4,27 @@
 
 ---
 
+## 2026-11-26 · Codex · PR #7 第一轮审核修订
+
+- 同一分支修正来源审批、词条链接、坏条目容错、跨小时迟到和私有诊断。保留原来的批准范围，天气以外的来源仍为待核准。
+- PR 只触发无凭证的 Linux 离线检查。真实工作流保留默认分支环境和两道批准关口。浏览器绑定仅需两个 Secret，并要求 Owner 看到私聊的通用消息才确认。完整步骤见 [运行手册](docs/operations.md)。
+- 本地 94 项离线测试通过，另通过依赖一致性、编译和差异检查。Linux 运行、V1–V9 结果及 `python -m tools.sample_report` 生成的整份两段合成日报见 [PR #7](https://github.com/alex20230412-svg/global-trend-radar/pull/7)。
+- V3 使用审核留言公开的 HN 原文规则、两站延迟值和历史结果重建样本。由于留言未附九份完整 robots 文件，没有用实时站点补取。P2 的可选新闻标题/媒体名展示已做离线投影，真实接入需 Owner 单独核准。
+- PR #5 尚未合并，继续以其修订分支为基线。真实来源、Secret、cron 与合并均未触发。当前 WAIT_OWNER。 [Claude 审核](https://github.com/alex20230412-svg/global-trend-radar/pull/7#issuecomment-7168526931)
+
+---
+
+## 2026-11-26 · Codex · 第一轮阶段 A
+
+- Owner 明确批准 Issue #6 审核后的离线开发。完整读取项目记录、方案、Issue #6 与 PR #5 修订。分支 `codex/phase-a-trend-collection` 以 PR #5 的 `docs/owner-direction-20261125` 最新提交 `a54ac7704febde6df2068ab95d7393db8eac759a` 为基线，支持独立评审第一轮差异。
+- 实现 HTTP 来源约束、适配器、小时观测和失败补齐、可解释评分、中文报告、Telegram 逐段状态机及私有健康。运行门禁只认公开代码仓库的默认 `main` 与专用私有数据仓库，源码中两条 cron 仍为注释。开源候选未直接移植代码。 [开源记录](docs/opensource.md)
+- 实际测试为 `.venv/Scripts/python.exe -X utf8 -m unittest discover -s tests -q`，73 项通过。另执行 `pip check`、`compileall -q radar tests tools`、`git diff --check` 和 PyPI 固定版本的公告核对。所有业务样本由合成数据或 Mock 构成，Git 并发测试使用本地裸仓库。
+- 初次哈希安装缺少 AnyIO 的传递依赖，补锁 typing-extensions 后安装通过。初次工作流测试发现 pip 参数中的冒号令 YAML 解析失败，改用折叠标量后通过。Windows 受限沙箱拦截 Git 的 MSYS 子进程，获准在沙箱外复跑同一本地离线测试，非强推竞争测试通过。
+- 尚未证实真实来源、私库和 Telegram 可用，L4/L5 均为 0。核心来源长期归档权限待核实，仅天气已找到明确许可。消息 `UNKNOWN` 会暂停自动续发。GitHub 整体停摆、凭证失效、定时延迟及容量有明确运维边界。 [来源证据](docs/sources.md) · [运行手册](docs/operations.md)
+- 阶段 A 新增费用 RM0。未访问真实数据仓库、运行真实采集、配置 Secrets、启用 cron、发送 Telegram 或合并 PR。交付 Draft 后等待 Claude 独立审核与 Owner 的阶段 B 指令。
+
+---
+
 ## 2026-11-25 · ChatGPT · PR #5 文档复核修正
 
 - Owner 转达 Claude 审核发现；核对原分支文件及 Issue #2 后确认：DECISIONS.md、STATUS.md 表格被空行截断，STATUS.md 沿用旧 VERIFIED 数量，D-008 引用未区分 Owner 原话与 AI 代录。

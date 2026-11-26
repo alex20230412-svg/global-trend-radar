@@ -1,0 +1,26 @@
+{
+  "algo_version": "phase-a-v1",
+  "window_hours": 24,
+  "freshness_hours": 3,
+  "title_match_hours": 12,
+  "title_similarity": 94,
+  "syndication_similarity": 97,
+  "minimum_title_chars": 24,
+  "my_limit": 10,
+  "global_limit": 10,
+  "new_limit": 5,
+  "rising_limit": 5,
+  "platform_limit": 3,
+  "weather_limit": 5,
+  "weather_lookahead_hours": 24,
+  "local_news_limit": 3,
+  "category_limit": 3,
+  "my_weights": {"volume": 1, "local_media": 0.75, "recency": 1},
+  "categories": {
+    "AI / 科技": ["ai", "artificial intelligence", "gpu", "semiconductor", "robot", "robotics", "openai", "chatgpt", "gemini", "llm", "cybersecurity", "iphone", "android", "科技", "人工智能", "芯片", "kecerdasan buatan", "teknologi"],
+    "商品 / 消费": ["shopping", "product launch", "sale", "preorder", "pre-order", "discount", "black friday", "consumer", "shopping festival", "购物", "新品", "折扣", "jualan", "jualan murah", "barangan", "diskaun", "pengguna"],
+    "娱乐": ["concert", "movie", "film", "cinema", "festival", "music", "k-pop", "konsert", "电影", "演唱会"],
+    "体育": ["football", "world cup", "league", "match", "badminton", "cricket", "bola sepak", "足球", "羽毛球"],
+    "公共事务": ["parliament", "election", "ministry", "budget", "pilihan raya", "parlimen", "选举", "国会"]
+  }
+}

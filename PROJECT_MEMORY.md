@@ -16,12 +16,12 @@
 
 Owner 的目标是一套能长期自动运行的系统，而不是只能演示功能的程序。
 
-## 当前已确认的方向（2026-11-25）
+## 已确认的方向
 
 - Owner 尚未确定商业方向；先发现全球与马来西亚的流行趋势，再寻找商业机会。不限制行业，优先可由 AI 自动化的商机。
-- 资讯暂时仅供 Owner 私人使用；当前由 Owner 手动触发收集，长期自动化仍为目标而非现有能力。
-- 暂不开发，不授权定时任务、公开发布或实际商业试点。禁止两个 AI 自动循环对话，讨论完成后等待 Owner 决定。
-- 依据：[Owner 决定](https://github.com/alex20230412-svg/global-trend-radar/issues/4#issuecomment-7167038713)，DECISIONS.md D-005 至 D-008。
+- 资讯仅供 Owner 私人使用，第一轮向独立 Telegram Bot 私聊发送中文报告。禁止两个 AI 自动循环对话。
+- D-007 记录前期由 Owner 手动触发验证的边界。2026-11-26 的 D-009 授权开发和离线验收，真实手动测试及定时运行各自等待批准。
+- 依据见 DECISIONS.md D-005 至 D-009。 [方向记录](https://github.com/alex20230412-svg/global-trend-radar/issues/4#issuecomment-7167038713) · [第一轮审核](https://github.com/alex20230412-svg/global-trend-radar/issues/6#issuecomment-7167409077)
 
 ## 范围
 
@@ -38,4 +38,4 @@ Owner 的目标是一套能长期自动运行的系统，而不是只能演示�
 
 ## 阶段流程
 
-阶段 0 准备 → 阶段 1 来源核查 → 阶段 2 MVP → 阶段 3 连续运行 7 天 → 阶段 4 扩展。每个阶段通过关口、经 Owner 验收后才进入下一阶段。详见 docs/PLAN.md 第 8 节。
+第一轮按 D-009 依次经过阶段 A 离线开发、阶段 B 手动验证、阶段 C 定时运行验收。阶段 B 与 C 分别由 Owner 批准，阶段 C 包含七天稳定性关口。长期扩展见 docs/PLAN.md。

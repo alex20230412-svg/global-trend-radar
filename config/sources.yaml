@@ -1,0 +1,171 @@
+# A candidate requires both long-term retention evidence and owner approval before live collection.
+# Keep Trends related article metadata disabled until those fields are separately cleared.
+sources:
+  - id: trends_my
+    kind: trends
+    geo: MY
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=MY"
+    enabled: true
+    retention: pending
+  - id: trends_sg
+    kind: trends
+    geo: SG
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=SG"
+    enabled: true
+    retention: pending
+  - id: trends_id
+    kind: trends
+    geo: ID
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=ID"
+    enabled: true
+    retention: pending
+  - id: trends_th
+    kind: trends
+    geo: TH
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=TH"
+    enabled: true
+    retention: pending
+  - id: trends_ph
+    kind: trends
+    geo: PH
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=PH"
+    enabled: true
+    retention: pending
+  - id: trends_vn
+    kind: trends
+    geo: VN
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=VN"
+    enabled: true
+    retention: pending
+  - id: trends_us
+    kind: trends
+    geo: US
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=US"
+    enabled: true
+    retention: pending
+  - id: trends_gb
+    kind: trends
+    geo: GB
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=GB"
+    enabled: true
+    retention: pending
+  - id: trends_in
+    kind: trends
+    geo: IN
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=IN"
+    enabled: true
+    retention: pending
+  - id: trends_jp
+    kind: trends
+    geo: JP
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=JP"
+    enabled: true
+    retention: pending
+  - id: trends_kr
+    kind: trends
+    geo: KR
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=KR"
+    enabled: true
+    retention: pending
+  - id: trends_tw
+    kind: trends
+    geo: TW
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=TW"
+    enabled: true
+    retention: pending
+  - id: trends_hk
+    kind: trends
+    geo: HK
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=HK"
+    enabled: true
+    retention: pending
+  - id: trends_au
+    kind: trends
+    geo: AU
+    language: und
+    url: "https://trends.google.com/trending/rss?geo=AU"
+    enabled: true
+    retention: pending
+  - id: malaysiakini
+    kind: news
+    geo: MY
+    language: en
+    url: "https://www.malaysiakini.com/rss/en/news.rss"
+    enabled: true
+    retention: pending
+  - id: malay_mail
+    kind: news
+    geo: MY
+    language: en
+    url: "https://www.malaymail.com/feed/rss/malaysia"
+    enabled: true
+    retention: pending
+  - id: fmt
+    kind: news
+    geo: MY
+    language: und
+    url: "https://cms.freemalaysiatoday.com/feed"
+    enabled: true
+    retention: pending
+  - id: bernama
+    kind: news
+    geo: MY
+    language: en
+    url: "https://www.bernama.com/en/rssfeed.php"
+    enabled: true
+    retention: pending
+  - id: hn
+    kind: hn
+    geo: GLOBAL
+    language: und
+    url: "https://hacker-news.firebaseio.com/v0/topstories.json"
+    enabled: true
+    retention: pending
+  - id: bluesky
+    kind: bluesky
+    geo: GLOBAL
+    language: und
+    url: "https://public.api.bsky.app/xrpc/app.bsky.unspecced.getTrendingTopics?limit=10"
+    enabled: true
+    retention: pending
+  - id: mastodon_tags
+    kind: mastodon
+    geo: GLOBAL
+    language: und
+    url: "https://mastodon.social/api/v1/trends/tags?limit=10"
+    enabled: true
+    retention: pending
+  - id: mastodon_links
+    kind: mastodon
+    geo: GLOBAL
+    language: und
+    url: "https://mastodon.social/api/v1/trends/links?limit=10"
+    enabled: true
+    retention: pending
+  - id: weather
+    kind: weather
+    geo: MY
+    language: und
+    url: "https://api.data.gov.my/weather/warning?limit=50&sort=-warning_issue__issued"
+    enabled: true
+    retention: long_term
+  - id: gdelt
+    kind: gdelt
+    geo: GLOBAL
+    language: und
+    url: "https://api.gdeltproject.org/api/v2/doc/doc"
+    enabled: false
+    retention: pending

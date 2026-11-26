@@ -20,7 +20,7 @@ from .sources import clean_url
 
 
 MYT = timezone(timedelta(hours=8), "MYT")
-PROMPT_VERSION = "brief-v3"
+PROMPT_VERSION = "brief-v4"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 # Flash follows the format and the no-invention rule better than Flash-Lite (first live run).
 GEMINI_MODELS = ("gemini-flash-latest", "gemini-flash-lite-latest")
@@ -47,7 +47,7 @@ SYSTEM_PROMPT = """你是一位为马来西亚华人读者写早报的中文编�
 规则：
 1. 只根据用户提供的 JSON 条目写，不得加入条目里没有的事实、数字、人名或日期。「可能的生意线索」一节除外，但那里也只能从条目推想，并且语气要保守。
 2. 搜索词本身看不出意思时，用它的 headline 解释它为什么热；仍然看不出就写「原因不明」，不要猜。
-3. 英文、马来文一律翻成简体中文，主题也写成中文。人名、歌名、App 名、品牌、球队名可以保留原文或用常见中文译名。
+3. 英文、马来文一律翻成简体中文。每条开头的主题必须是中文词，例如 lrt 写成「轻快铁」、tariff 写成「美国关税」；人名、歌名、App 名、品牌、球队名可以保留原文或用常见中文译名。
 4. 不要写任何国家或地区名单、搜索量或排名数字，程序会自己补上。
 5. 只写 JSON 里有的条目，每个条目最多一行，开头保留条目编号，例如 [m1]；不要新增条目，不要写链接，不要用 Markdown（不要 ** 或 #）。
 6. 严格按下面的格式和顺序输出，某一节没有条目就整节省略（天气没有就写「今天没有天气警告」）。
@@ -68,7 +68,7 @@ SYSTEM_PROMPT = """你是一位为马来西亚华人读者写早报的中文编�
 （最多 5 条）
 
 📱 大家在下载（马来西亚 App Store 热门免费 App）
-[a1] App 名：一句话说明这是什么 App（不超过 25 字）
+[a1] App 名：一句话说明这个 App 是做什么用的（可按 App 名和开发商用常识判断，例如「网购」「电子钱包」，不超过 25 字）
 （最多 5 条）
 
 📰 马来西亚新闻
@@ -177,8 +177,9 @@ def collect_items(snapshot):
         row["rising"] = trend_key(row["term"]) in rising
     charts = snapshot.get("charts", {})
     for section, source_id, prefix in (("music", "apple_music_my", "s"), ("apps", "app_store_my", "a")):
+        maker = "artist" if section == "music" else "developer"  # Apple's artistName is the developer for apps
         items[section] = [{
-            "id": f"{prefix}{number}", "title": _clean(entry["title"], 80), "artist": _clean(entry.get("artist"), 60),
+            "id": f"{prefix}{number}", "title": _clean(entry["title"], 80), maker: _clean(entry.get("artist"), 60),
             "genre": _clean(entry.get("genre"), 30), "link": clean_url(entry.get("url")),
         } for number, entry in enumerate(charts.get(source_id, [])[:LIMITS[section]], 1)]
     items["news"] = []
@@ -359,7 +360,8 @@ def plain_blocks(items, snapshot, now):
     section("🎵 大家在听（马来西亚 Apple Music 热门歌曲）",
             [f"[{row['id']}] {row['title']}" + (f" - {row['artist']}" if row["artist"] else "") for row in items["music"]])
     section("📱 大家在下载（马来西亚 App Store 热门免费 App）",
-            [f"[{row['id']}] {row['title']}" + (f"（{row['genre']}）" if row["genre"] else "") for row in items["apps"]])
+            [f"[{row['id']}] {row['title']}" + (f"（{row['genre'] or row['developer']}）" if row["genre"] or row["developer"] else "")
+             for row in items["apps"]])
     section("📰 马来西亚新闻", [f"[{row['id']}] {row['title']}（{row['publisher']}）" for row in items["news"]])
     weather = [f"[{row['id']}] {row['title']}" + (f"，到 {row['until']}" if row["until"] else "")
                for row in items["weather"]]

@@ -20,7 +20,7 @@ from .sources import clean_url
 
 
 MYT = timezone(timedelta(hours=8), "MYT")
-PROMPT_VERSION = "brief-v2"
+PROMPT_VERSION = "brief-v3"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 # Flash follows the format and the no-invention rule better than Flash-Lite (first live run).
 GEMINI_MODELS = ("gemini-flash-latest", "gemini-flash-lite-latest")
@@ -40,28 +40,36 @@ SOURCE_NAMES = {
     "malaysiakini": "当今大马（英文）", "malaysiakini_zh": "当今大马（中文）", "malay_mail": "Malay Mail",
     "fmt": "Free Malaysia Today", "bernama": "马新社", "hn": "Hacker News", "bluesky": "Bluesky",
     "mastodon_tags": "Mastodon 标签", "mastodon_links": "Mastodon 链接", "weather": "大马气象局",
-    "gdelt": "GDELT",
+    "gdelt": "GDELT", "apple_music_my": "Apple Music 榜", "app_store_my": "App Store 榜",
 }
-SYSTEM_PROMPT = """你是一位为马来西亚华人读者写早报的中文编辑。读者看不懂英文和马来文，只想知道「今天大家在关心什么」。
+SYSTEM_PROMPT = """你是一位为马来西亚华人读者写早报的中文编辑。读者看不懂英文和马来文，最想知道「现在最流行什么、大家最热门的话题是什么」。
 
 规则：
 1. 只根据用户提供的 JSON 条目写，不得加入条目里没有的事实、数字、人名或日期。「可能的生意线索」一节除外，但那里也只能从条目推想，并且语气要保守。
-2. 搜索词本身看不出意思时，用它的 headline 解释；仍然看不出就写「原因不明」，不要猜。
-3. 英文、马来文一律翻成简体中文，主题也写成中文。人名、品牌、球队名可以保留原文或用常见中文译名。
-4. 不要写任何国家或地区名单，程序会自己补上。
+2. 搜索词本身看不出意思时，用它的 headline 解释它为什么热；仍然看不出就写「原因不明」，不要猜。
+3. 英文、马来文一律翻成简体中文，主题也写成中文。人名、歌名、App 名、品牌、球队名可以保留原文或用常见中文译名。
+4. 不要写任何国家或地区名单、搜索量或排名数字，程序会自己补上。
 5. 只写 JSON 里有的条目，每个条目最多一行，开头保留条目编号，例如 [m1]；不要新增条目，不要写链接，不要用 Markdown（不要 ** 或 #）。
 6. 严格按下面的格式和顺序输出，某一节没有条目就整节省略（天气没有就写「今天没有天气警告」）。
 
 格式：
 📅 {date} 热点早报
 
-🇲🇾 马来西亚今天大家在搜什么
-[m1] 主题：一句话说明（不超过 40 字）
-（最多 8 条）
+🔥 马来西亚现在最热门的话题
+[m1] 主题：一句话说明大家为什么在搜（不超过 40 字）
+（最多 8 条，按条目顺序）
 
-🌏 其他国家在搜
+🌏 全球正在热议
 [o1] 主题：一句话说明（不超过 40 字）
 （最多 4 条）
+
+🎵 大家在听（马来西亚 Apple Music 热门歌曲）
+[s1] 歌名 - 歌手：一句很短的说明，例如曲风或是谁的新歌（不超过 20 字，看不出就只写歌名和歌手）
+（最多 5 条）
+
+📱 大家在下载（马来西亚 App Store 热门免费 App）
+[a1] App 名：一句话说明这是什么 App（不超过 25 字）
+（最多 5 条）
 
 📰 马来西亚新闻
 [n1] 一句话新闻（最多 3 条）
@@ -70,7 +78,7 @@ SYSTEM_PROMPT = """你是一位为马来西亚华人读者写早报的中文编�
 [w1] 警告内容，到什么时候（最多 3 条）
 
 💡 可能的生意线索（AI 推测，仅供参考）
-- 一句话（最多 2 条）"""
+- 结合上面的热门话题、歌曲和 App 推想的一句话（最多 3 条）"""
 
 
 @dataclass
@@ -108,7 +116,7 @@ def _date(now):
 
 
 SPORTS = re.compile(r"\bvs?\.?\b|\bnba\b|\bnfl\b|\bepl\b|\bfc\b", re.IGNORECASE)
-LIMITS = {"malaysia": 8, "other": 4, "news": 3, "weather": 3}
+LIMITS = {"malaysia": 8, "other": 4, "music": 5, "apps": 5, "news": 3, "weather": 3}
 
 
 def _is_sport(entry):
@@ -139,6 +147,7 @@ def _topics(entries, prefix, limit, region_key, exclude=None, seen=None, headlin
         rows.append({
             "term": _clean(entry["title"], 80), "headline": headline, "publisher": publisher,
             region_key: _countries(entry.get("geos"), exclude=exclude), "link": _link(entry),
+            "volume": _clean(entry.get("volume_raw"), 12) if exclude == "MY" else "",
         })
     if sports:
         games = "；".join(_clean(entry["title"], 40) for entry in sports[:4])
@@ -166,6 +175,12 @@ def collect_items(snapshot):
     items["other"] = _topics(other, "o", LIMITS["other"], "countries", seen=seen, headlines=headlines)
     for row in items["other"]:
         row["rising"] = trend_key(row["term"]) in rising
+    charts = snapshot.get("charts", {})
+    for section, source_id, prefix in (("music", "apple_music_my", "s"), ("apps", "app_store_my", "a")):
+        items[section] = [{
+            "id": f"{prefix}{number}", "title": _clean(entry["title"], 80), "artist": _clean(entry.get("artist"), 60),
+            "genre": _clean(entry.get("genre"), 30), "link": clean_url(entry.get("url")),
+        } for number, entry in enumerate(charts.get(source_id, [])[:LIMITS[section]], 1)]
     items["news"] = []
     for entry in snapshot.get("local_news", [])[:LIMITS["news"]]:
         items["news"].append({
@@ -186,7 +201,7 @@ def collect_items(snapshot):
     return items
 
 
-HIDDEN_KEYS = {"link", "also_searched_in", "countries"}  # regions are added by code, never by the model
+HIDDEN_KEYS = {"link", "also_searched_in", "countries", "volume"}  # regions are added by code, never by the model
 
 
 def _prompt_payload(items, now):
@@ -219,9 +234,9 @@ def _block(lines, links=None):
     """Lines become one Telegram block; [id] markers turn into a trailing 🔗 link."""
     html, plain = [], []
     for index, line in enumerate(lines):
-        match = re.search(r"\[([mnow][0-9]{1,2})\]", line)
+        match = re.search(r"\[([mnowsa][0-9]{1,2})\]", line)
         url = (links or {}).get(match.group(1)) if match else None
-        text = re.sub(r"\s*\[[mnow][0-9]{1,2}\]\s*", " ", line).strip()
+        text = re.sub(r"\s*\[[mnowsa][0-9]{1,2}\]\s*", " ", line).strip()
         bold = index == 0
         safe = escape(text, quote=False)
         if bold:
@@ -269,8 +284,8 @@ def _links(items):
     return {row["id"]: row["link"] for rows in items.values() for row in rows if row.get("link")}
 
 
-SECTION_KINDS = (("📅", "title"), ("🇲🇾", "items"), ("🌏", "items"), ("📰", "items"), ("⚠", "items"),
-                 ("💡", "ideas"))
+SECTION_KINDS = (("📅", "title"), ("🔥", "items"), ("🌏", "items"), ("🎵", "items"), ("📱", "items"),
+                 ("📰", "items"), ("⚠", "items"), ("💡", "ideas"))
 MODEL_REGIONS = re.compile(r"\s*[（(][^（）()]*(?:也在|搜)[^（）()]*[）)]")
 
 
@@ -288,16 +303,18 @@ def shape_ai(text, items):
             continue
         lines = [head]
         if kind == "ideas":
-            lines += [line for line in section[1:] if line.lstrip().startswith(("-", "•"))][:2]
+            lines += [line for line in section[1:] if line.lstrip().startswith(("-", "•"))][:3]
         else:
             used = set()
             for line in section[1:]:
-                match = re.search(r"\[([mnow][0-9]{1,2})\]", line)
+                match = re.search(r"\[([mnowsa][0-9]{1,2})\]", line)
                 if not match or match.group(1) not in rows or match.group(1) in used:
                     continue
                 used.add(match.group(1))
                 row = rows[match.group(1)]
                 line = MODEL_REGIONS.sub("", line).rstrip()
+                if row.get("volume"):
+                    line += f" · 搜索 {row['volume']}"
                 if row.get("also_searched_in"):
                     line += f"（{'、'.join(row['also_searched_in'])}也在搜）"
                 elif row.get("countries"):
@@ -312,7 +329,7 @@ def shape_ai(text, items):
 
 def ai_blocks(text, items, snapshot):
     sections = shape_ai(text, items)
-    if not any(section[0].startswith("🇲🇾") and len(section) > 1 for section in sections):
+    if not any(section[0].startswith("🔥") and len(section) > 1 for section in sections):
         raise ValueError("no_malaysia_items")
     blocks = [_block(section, _links(items)) for section in sections]
     footer = _footer(snapshot) + " · 以上由 AI 根据当天标题整理，可能有误，点 🔗 看原文"
@@ -321,26 +338,31 @@ def ai_blocks(text, items, snapshot):
 
 
 def plain_blocks(items, snapshot, now):
-    blocks = [_block([f"📅 {_date(now)} 热点早报", "（AI 摘要今天不可用，以下是原文标题，点 🔗 看原文）"])]
+    blocks = [_block([f"📅 {_date(now)} 热点早报", "（AI 摘要今天不可用，以下是原文，点 🔗 看原文）"])]
     links = _links(items)
-    lines = ["🇲🇾 马来西亚今天大家在搜什么"]
+
+    def section(heading, lines):
+        if lines:
+            blocks.append(_block([heading, *lines], links))
+
+    lines = []
     for row in items["malaysia"]:
+        volume = f" · 搜索 {row['volume']}" if row.get("volume") else ""
         also = f"（{'、'.join(row['also_searched_in'])}也在搜）" if row["also_searched_in"] else ""
         why = f" —— {row['headline']}" if row["headline"] else ""
-        lines.append(f"[{row['id']}] {row['term']}{also}{why}")
-    if len(lines) > 1:
-        blocks.append(_block(lines, links))
-    lines = ["🌏 其他国家在搜"]
-    for row in items["other"][:4]:
-        why = f" —— {row['headline']}" if row["headline"] else ""
-        lines.append(f"[{row['id']}] {row['term']}（{'、'.join(row['countries'])}）{why}")
-    if len(lines) > 1:
-        blocks.append(_block(lines, links))
-    lines = ["📰 马来西亚新闻"] + [f"[{row['id']}] {row['title']}（{row['publisher']}）" for row in items["news"][:3]]
-    if len(lines) > 1:
-        blocks.append(_block(lines, links))
+        lines.append(f"[{row['id']}] {row['term']}{volume}{also}{why}")
+    section("🔥 马来西亚现在最热门的话题", lines)
+    section("🌏 全球正在热议", [
+        f"[{row['id']}] {row['term']}（{'、'.join(row['countries'])}）" + (f" —— {row['headline']}" if row["headline"] else "")
+        for row in items["other"]
+    ])
+    section("🎵 大家在听（马来西亚 Apple Music 热门歌曲）",
+            [f"[{row['id']}] {row['title']}" + (f" - {row['artist']}" if row["artist"] else "") for row in items["music"]])
+    section("📱 大家在下载（马来西亚 App Store 热门免费 App）",
+            [f"[{row['id']}] {row['title']}" + (f"（{row['genre']}）" if row["genre"] else "") for row in items["apps"]])
+    section("📰 马来西亚新闻", [f"[{row['id']}] {row['title']}（{row['publisher']}）" for row in items["news"]])
     weather = [f"[{row['id']}] {row['title']}" + (f"，到 {row['until']}" if row["until"] else "")
-               for row in items["weather"][:3]]
+               for row in items["weather"]]
     blocks.append(_block(["⚠️ 天气", *(weather or ["今天没有天气警告"])], links))
     footer = _footer(snapshot)
     blocks.append((escape(footer, quote=False), footer))

@@ -28,11 +28,18 @@ class FakeWriter:
 
 AI_TEXT = """## 📅 11月27日 热点早报
 
-**🇲🇾 马来西亚今天大家在搜什么**
+**🔥 马来西亚现在最热门的话题**
 [m1] 课堂 AI 助教：一款离线多语助教开放试用（也在中国、巴西、德国搜寻） https://evil.example/x
 1. [m2] 购物节：低耗雾灯新品打折
 [m99] 不存在的编号
 凭空多出来的一行
+
+🎵 大家在听（马来西亚 Apple Music 热门歌曲）
+[s1] 示例情歌 - 示例歌手甲：抒情慢歌
+[s9] 编造的歌
+
+📱 大家在下载（马来西亚 App Store 热门免费 App）
+[a1] 示例记账 App：记录日常开支
 
 📰 马来西亚新闻
 [n1] 社区修理站开放自行车检修日
@@ -55,7 +62,8 @@ class BriefTests(unittest.TestCase):
         self.assertEqual("no_writer", brief.meta["status"])
         self.assertEqual(1, len(brief.parts))
         text = _message_text(brief.parts[0])
-        for expected in ("马来西亚今天大家在搜什么", "其他国家在搜", "马来西亚新闻", "天气", "新加坡", "🔗",
+        for expected in ("马来西亚现在最热门的话题", "全球正在热议", "大家在听", "示例情歌（合成） - 示例歌手甲",
+                         "大家在下载", "示例记账 App（Finance）", "马来西亚新闻", "天气", "新加坡", "搜索 ", "🔗",
                          "AI 摘要今天不可用", "数据来源"):
             self.assertIn(expected, text)
         for unexpected in ("Hacker News", "Mastodon 标签", "Bluesky", "也在 SG", "📰1 家"):
@@ -83,8 +91,13 @@ class BriefTests(unittest.TestCase):
         self.assertNotIn("不存在的编号", text)
         self.assertNotIn("凭空多出来的一行", text)
         items = collect_items(self.snapshot)
-        expected = f"（{'、'.join(items['malaysia'][0]['also_searched_in'])}也在搜）"
+        first = items["malaysia"][0]
+        expected = f" · 搜索 {first['volume']}（{'、'.join(first['also_searched_in'])}也在搜）"
         self.assertIn("课堂 AI 助教：一款离线多语助教开放试用" + expected, text)
+        self.assertIn("示例情歌 - 示例歌手甲：抒情慢歌", text)
+        self.assertNotIn("编造的歌", text)
+        self.assertIn('href="https://music.apple.com/my/album/synthetic-1"', html)
+        self.assertIn("示例记账 App：记录日常开支", text)
         system, prompt = writer.calls[0]
         self.assertIn("不得加入条目里没有的事实", system)
         self.assertNotIn("http", prompt)

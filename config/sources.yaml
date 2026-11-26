@@ -190,3 +190,17 @@ sources:
     url: "https://api.gdeltproject.org/api/v2/doc/doc"
     enabled: false
     retention: pending
+  - id: apple_music_my
+    kind: chart
+    geo: MY
+    language: und
+    url: "https://rss.marketingtools.apple.com/api/v2/my/music/most-played/25/songs.json"
+    enabled: true
+    retention: long_term
+  - id: app_store_my
+    kind: chart
+    geo: MY
+    language: und
+    url: "https://rss.marketingtools.apple.com/api/v2/my/apps/top-free/25/apps.json"
+    enabled: true
+    retention: long_term

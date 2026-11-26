@@ -24,7 +24,7 @@ from .source_http import CONNECT_TIMEOUT, GDELT_HOST, SourceError, SourceHttp
 
 
 DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "config" / "sources.yaml"
-KINDS = {"trends", "news", "hn", "bluesky", "mastodon", "weather", "gdelt"}
+KINDS = {"trends", "news", "hn", "bluesky", "mastodon", "weather", "gdelt", "chart"}
 GEOS = {"MY", "SG", "ID", "TH", "PH", "VN", "US", "GB", "IN", "JP", "KR", "TW", "HK", "AU"}
 TREND_URL = "https://trends.google.com/trending/rss?geo="
 WEATHER_LINK = "https://www.met.gov.my/en/"
@@ -50,7 +50,11 @@ SITE_ENDPOINTS = {
     "mastodon_links": ("mastodon", "https://mastodon.social/api/v1/trends/links?limit=10"),
     "weather": ("weather", "https://api.data.gov.my/weather/warning/?limit=50&sort=-warning_issue__issued"),
     "gdelt": ("gdelt", GDELT_URL),
+    # Apple Marketing Tools charts: official, keyless; robots.txt has no rules (checked 2026-11-26).
+    "apple_music_my": ("chart", "https://rss.marketingtools.apple.com/api/v2/my/music/most-played/25/songs.json"),
+    "app_store_my": ("chart", "https://rss.marketingtools.apple.com/api/v2/my/apps/top-free/25/apps.json"),
 }
+CHART_LINK_HOSTS = {"music.apple.com", "apps.apple.com"}
 TRACKERS = {"fbclid", "gclid", "dclid", "msclkid", "igshid", "mc_cid", "mc_eid", "mkt_tok"}
 SENSITIVE_QUERY = {"token", "access_token", "api_key", "key", "password", "email", "sig", "signature"}
 HT_NAMESPACES = {
@@ -479,6 +483,25 @@ def _weather(source, body):
     return _item_rows(_list(_json(body))[:50], parse_item)
 
 
+def _chart(source, body):
+    """Apple storefront chart: rank, title, artist or developer, and the main genre."""
+    feed = _object(_object(_json(body)).get("feed"))
+
+    def parse_item(rank, raw):
+        item = _item_object(raw)
+        url = item.get("url")
+        if clean_url(url) is None or urlsplit(url).hostname not in CHART_LINK_HOSTS:
+            raise MalformedItem("chart_link")
+        genres = [_title(genre.get("name"), 48) for genre in item.get("genres") or ()
+                  if isinstance(genre, dict) and genre.get("name") not in (None, "Music", "Apps")]
+        return _observation(source, item.get("name"), url, rank) | {
+            "artist": _title(item.get("artistName"), 120) or None,
+            "genre": next((genre for genre in genres if genre), None),
+        }
+
+    return _item_rows(_list(feed.get("results"))[:25], parse_item)
+
+
 def _gdelt(source, get):
     def parse_article(_rank, raw):
         article = _item_object(raw)
@@ -529,6 +552,7 @@ def collect_source(source, http=None):
                 "bluesky": _bluesky,
                 "mastodon": _mastodon,
                 "weather": _weather,
+                "chart": _chart,
             }[source.kind]
             rows = parser(source, body)
     unique = {}

@@ -201,13 +201,31 @@ class GeminiWriterTests(unittest.TestCase):
 
     def test_rate_limit_and_network_errors_are_codes_only(self):
         text, status, model = self.writer(lambda request: httpx.Response(429, text=KEY)).write("s", "p")
-        self.assertEqual((None, "http_429", "gemini-flash-latest"), (text, status, model))
+        self.assertEqual((None, "http_429", "gemini-flash-lite-latest"), (text, status, model))
 
         def broken(request):
             raise httpx.ConnectTimeout(KEY)
 
         text, status, model = self.writer(broken).write("s", "p")
-        self.assertEqual((None, "network_ConnectTimeout", None), (text, status, model))
+        self.assertEqual((None, "network_ConnectTimeout", "gemini-flash-lite-latest"), (text, status, model))
+
+    def test_a_slow_first_model_falls_through_to_the_next(self):
+        def handler(request):
+            if "/models/gemini-flash-latest:" in request.url.path:
+                raise httpx.ReadTimeout("slow")
+            return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "好"}]}}]})
+
+        self.assertEqual(("好", "ok", "gemini-flash-lite-latest"), self.writer(handler).write("s", "p"))
+
+    def test_a_refused_key_stops_at_the_first_model(self):
+        calls = []
+
+        def handler(request):
+            calls.append(request.url.path)
+            return httpx.Response(403)
+
+        self.assertEqual((None, "http_403", "gemini-flash-latest"), self.writer(handler).write("s", "p"))
+        self.assertEqual(1, len(calls))
 
     def test_invalid_key_is_rejected_and_live_falls_back_to_plain_with_a_reason(self):
         with self.assertRaises(ValueError):

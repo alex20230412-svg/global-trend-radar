@@ -1,7 +1,7 @@
 name: Radar keepalive
 
 # GitHub disables scheduled workflows in a public repository after 60 days without activity.
-# Re-enabling them through the API resets that clock. Twice a month, no checkout, no secrets.
+# Re-enabling them through the API resets that clock. Twice a month, without checkout or credentials beyond the job token.
 on:
   schedule:
     - cron: '41 3 1,15 * *'

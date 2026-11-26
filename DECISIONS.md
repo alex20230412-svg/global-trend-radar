@@ -17,6 +17,7 @@
 | D-009 | 2026-11-26 | 授权第一轮阶段 A，按 Issue #6 正式审核开发、使用合成样本与 Mock 离线测试、提交 Draft PR 后等待 Claude 独立审核和 Owner 决定。分别批准阶段 B 手动真实验证及阶段 C 定时运行验收。继续保持 RM0、私人使用、双仓库隔离及禁止 AI 自动循环，健康记录只写专用私库。 | Owner 2026-11-26 在 Codex 会话中的明确授权及 [Issue #6 审核意见](https://github.com/alex20230412-svg/global-trend-radar/issues/6#issuecomment-7167409077) |
 | D-010 | 2026-11-26 | 全部现有候选的最少字段获 Owner 批准用于个人私聊与长期保存。新增来源须为官方 RSS 或 API、robots 允许且只采元数据。14 个 Google Trends 地区启用 `retain_related` 与「为什么热」。Claude 已依授权合并 PR #5、#7、#8。阶段 B 先由 Claude 在经审核的 `main` 无凭证实测，确认可用后才安排 Owner 配置 Telegram Token 和私库 PAT。GDELT 在 Actions 连通证据出现前保持生产关闭。 | [Issue #9 记录的 Owner 决定与任务单](https://github.com/alex20230412-svg/global-trend-radar/issues/9) |
 | D-011 | 2026-11-26 | Owner 表示第一份日报「完全看不懂」，并让 Claude 安排阶段 C（「你去安排」）。Telegram 改发中文早报：有 `GEMINI_API_KEY` 时由 Gemini 免费层只根据当天条目整理，否则发白话中文原文标题版；详细版只存私库。阶段 C 开启每小时采集和 08:30 MYT 日报的 cron，只在 `RADAR_STAGE=c-scheduled` 时运行；首次计划采集自动记录开始时间；公开仓库用 API 保活；每源新闻 30 条、相关报道 2 条，容量阈值 700/900 MiB。 | [Issue #16](https://github.com/alex20230412-svg/global-trend-radar/issues/16) |
+| D-012 | 2026-11-26 | Owner：「这版我看得懂了，但是里面只有新闻，我还要最新的资讯，现在最流行的是什么，最热门的话题是什么？」早报改为以流行为主：先列马来西亚最热门的搜索话题（附搜索量），再列全球热议、Apple Music 和 App Store 马来西亚榜，然后才是新闻、天气和生意线索。新增官方免费的 Apple 榜单来源；YouTube 热门待 Owner 提供 key。TikTok、Facebook、Instagram、X 没有免费合法的官方接口，暂不接入。 | [Issue #16](https://github.com/alex20230412-svg/global-trend-radar/issues/16) |
 
 D-007 保留为之前手动验证阶段的历史决定。D-009 取代其中「暂不开发」的限制，生效范围为阶段 A。P-001 至 P-008 保留为历史提议，只有 D-009 所引用的修订范围获批。本轮不授权商业试点。
 

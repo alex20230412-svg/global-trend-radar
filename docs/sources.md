@@ -46,3 +46,11 @@
 | 2026-11-26 | [45746980188](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45746980188) | **24/24**，日报 1 段 3,491 字，未降级 |
 
 GDELT 在全部 5 次运行中都连不上（诊断为 `ConnectTimeout`，8 秒连接超时也一样），判断为不接受 GitHub runner 的连接，保持 `enabled: false`。私库写入和 Telegram 投递待 Owner 完成凭证设置后实测。
+
+## 流行榜单（D-012，2026-11-26）
+
+| 来源 | 地址 | 依据与证据 |
+| --- | --- | --- |
+| `apple_music_my` | `rss.marketingtools.apple.com/api/v2/my/music/most-played/25/songs.json` | Apple 官方 Marketing Tools 榜单，不需要 key。robots.txt 只有一行注释，没有规则（Claude 2026-11-26 核查）。只存排名、歌名、歌手、类型和链接，不存封面图。live-check [45772752652](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45772752652)：`ok`，25 条 |
+| `app_store_my` | `rss.marketingtools.apple.com/api/v2/my/apps/top-free/25/apps.json` | 同上。Claude 15:00 前后用浏览器访问曾返回 502/504，live-check 时已恢复：`ok`，25 条 |
+| YouTube 马来西亚热门（待接入） | YouTube Data API `videos.list?chart=mostPopular&regionCode=MY` | 官方 API，需要 Owner 提供 `YOUTUBE_API_KEY`。YouTube 取消「热门」页面后，这个榜单改为收录热门音乐、电影和游戏视频 |

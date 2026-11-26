@@ -274,7 +274,24 @@ class BriefTests(unittest.TestCase):
 
 class GeminiWriterTests(unittest.TestCase):
     def writer(self, handler, **options):
+        options.setdefault("retry_delay", 0)
         return GeminiWriter(KEY, transport=httpx.MockTransport(handler), **options)
+
+    def test_busy_models_get_one_more_pass_after_a_wait(self):
+        calls, waits = [], []
+
+        def handler(request):
+            calls.append(request.url.path)
+            if len(calls) <= 2:
+                return httpx.Response(503, text=KEY)
+            return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "{}"}]}}]})
+
+        writer = self.writer(handler, retry_delay=30, sleep=waits.append)
+        self.assertEqual(("{}", "ok"), writer.write("s", "p")[:2])
+        self.assertEqual([30], waits)
+        refused = self.writer(lambda request: httpx.Response(403), retry_delay=30, sleep=waits.append)
+        self.assertEqual("http_403", refused.write("s", "p")[1])
+        self.assertEqual([30], waits)
 
     def test_key_goes_in_header_and_unknown_model_tries_the_next_alias(self):
         seen = []

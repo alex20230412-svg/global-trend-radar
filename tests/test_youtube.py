@@ -76,8 +76,9 @@ class YouTubeTests(unittest.TestCase):
             self.fail("No request should be made for an invalid or disabled client")
 
         with httpx.Client(transport=httpx.MockTransport(unreachable)) as client:
-            disabled = load_youtube_config()
-            self.assertFalse(disabled.enabled)
+            shipped = load_youtube_config()
+            self.assertEqual(("MY", 25, 5), (shipped.region, shipped.max_results, shipped.per_category))
+            disabled = YouTubeConfig(enabled=False)
             self.assertEqual(fetch_youtube(disabled, MOCK_KEY, client=client).status, "disabled")
             enabled = YouTubeConfig(enabled=True)
             for key in ("", "   ", None):

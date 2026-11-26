@@ -2,6 +2,18 @@
 
 最后更新 2026-11-26 MYT，Claude。
 
+## YouTube 热门 · 已派给 Codex（2026-11-26）
+
+- Owner 要求加入 YouTube 资讯（D-013）。任务单见 [Issue #28](https://github.com/alex20230412-svg/global-trend-radar/issues/28)。
+  - 来源：官方 YouTube Data API `mostPopular`，马来西亚榜。2025-07-21 起只含音乐、电影、游戏。
+  - 只发送、不存储：YouTube 政策规定这类数据最多保存 30 天，私库是 git，无法真正删除。
+- 流程：
+  1. Codex 开发，提交 Draft PR；
+  2. Claude 审核后合并，此时默认关闭；
+  3. Owner 填 `YOUTUBE_API_KEY`；
+  4. Claude 开启并实测。
+- 现有早报和阶段 C 不受影响。新增费用 RM0。
+
 ## 中文早报与阶段 C · 等待 Owner 确认并切换 `c-scheduled`（2026-11-26）
 
 - Owner 反馈第一份日报「完全看不懂」，D-011 改为在 Telegram 发中文早报（`radar/brief.py`）。

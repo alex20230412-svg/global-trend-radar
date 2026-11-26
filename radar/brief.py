@@ -106,43 +106,82 @@ def _date(now):
     return f"{local.month}月{local.day}日"
 
 
+SPORTS = re.compile(r"\bvs?\.?\b|\bnba\b|\bnfl\b|\bepl\b|\bfc\b", re.IGNORECASE)
+LIMITS = {"malaysia": 8, "other": 4, "news": 3, "weather": 3}
+
+
+def _is_sport(entry):
+    return entry.get("category") == "体育" or SPORTS.search(str(entry.get("title", ""))) is not None
+
+
+def _topics(entries, prefix, limit, region_key, exclude=None, seen=None, headlines=None):
+    """Merge sports into one row and drop repeats (same topic or same context headline) before the cap.
+
+    The model was asked to do this in the prompt but did not reliably follow it, so the input
+    is shaped in code: the model only ever sees at most `limit` topics.
+    """
+    seen = set() if seen is None else seen
+    headlines = set() if headlines is None else headlines
+    rows, sports = [], []
+    for entry in entries:
+        key = trend_key(entry["title"])
+        headline, publisher, _url = _context(entry)
+        if key in seen or (headline and headline in headlines):
+            seen.add(key)
+            continue
+        seen.add(key)
+        if headline:
+            headlines.add(headline)
+        if _is_sport(entry):
+            sports.append(entry)
+            continue
+        rows.append({
+            "term": _clean(entry["title"], 80), "headline": headline, "publisher": publisher,
+            region_key: _countries(entry.get("geos"), exclude=exclude), "link": _link(entry),
+        })
+    if sports:
+        games = "；".join(_clean(entry["title"], 40) for entry in sports[:4])
+        regions = []
+        for entry in sports:
+            regions.extend(country for country in _countries(entry.get("geos"), exclude=exclude) if country not in regions)
+        sport = {"term": "体育赛事", "headline": games, "publisher": "", region_key: regions[:6],
+                 "link": _link(sports[0])}
+        rows.insert(min(len(rows), limit - 1), sport)
+    rows = rows[:limit]
+    for number, row in enumerate(rows, 1):
+        row["id"] = f"{prefix}{number}"
+    return rows
+
+
 def collect_items(snapshot):
     """Pick the items the brief may mention, each with a stable id and an optional link."""
-    items = {"malaysia": [], "other": [], "news": [], "weather": []}
-    shown = set()
-    for number, entry in enumerate(snapshot.get("malaysia", [])[:10], 1):
-        shown.add(trend_key(entry["title"]))
-        headline, publisher, _url = _context(entry)
-        items["malaysia"].append({
-            "id": f"m{number}", "term": _clean(entry["title"], 80), "headline": headline, "publisher": publisher,
-            "also_searched_in": _countries(entry.get("geos"), exclude="MY"),
-            "link": _link(entry),
-        })
+    seen, headlines = set(), set()
+    items = {
+        "malaysia": _topics(snapshot.get("malaysia", []), "m", LIMITS["malaysia"], "also_searched_in",
+                            exclude="MY", seen=seen, headlines=headlines),
+    }
     rising = {trend_key(entry["title"]) for entry in snapshot.get("rising", [])}
-    for entry in [*snapshot.get("monitored_regions", []), *snapshot.get("rising", []), *snapshot.get("new", [])]:
-        key = trend_key(entry["title"])
-        if key in shown or len(items["other"]) >= 6:
-            continue
-        shown.add(key)
-        headline, publisher, _url = _context(entry)
-        items["other"].append({
-            "id": f"o{len(items['other']) + 1}", "term": _clean(entry["title"], 80), "headline": headline,
-            "publisher": publisher, "countries": _countries(entry.get("geos")), "rising": key in rising,
-            "link": _link(entry),
-        })
-    for number, entry in enumerate(snapshot.get("local_news", [])[:4], 1):
+    other = [*snapshot.get("monitored_regions", []), *snapshot.get("rising", []), *snapshot.get("new", [])]
+    items["other"] = _topics(other, "o", LIMITS["other"], "countries", seen=seen, headlines=headlines)
+    for row in items["other"]:
+        row["rising"] = trend_key(row["term"]) in rising
+    items["news"] = []
+    for entry in snapshot.get("local_news", [])[:LIMITS["news"]]:
         items["news"].append({
-            "id": f"n{number}", "title": _clean(entry["title"], 160),
+            "id": f"n{len(items['news']) + 1}", "title": _clean(entry["title"], 160),
             "publisher": PUBLISHERS.get(entry.get("source_id"), _clean(entry.get("publisher"), 40)),
             "link": clean_url(entry.get("url")),
         })
-    for number, entry in enumerate(snapshot.get("weather", [])[:4], 1):
+    latest = {}
+    for entry in snapshot.get("weather", []):
+        title = _clean(entry["title"], 120)
         until = instant(entry.get("valid_to"))
-        items["weather"].append({
-            "id": f"w{number}", "title": _clean(entry["title"], 120),
-            "until": until.astimezone(MYT).strftime("%m-%d %H:%M") if until else None,
-            "link": None,
-        })
+        if title not in latest or (until and (latest[title] is None or until > latest[title])):
+            latest[title] = until
+    items["weather"] = [{
+        "id": f"w{number}", "title": title,
+        "until": until.astimezone(MYT).strftime("%m-%d %H:%M") if until else None, "link": None,
+    } for number, (title, until) in enumerate(list(latest.items())[:LIMITS["weather"]], 1)]
     return items
 
 

@@ -284,7 +284,7 @@ class BriefTests(unittest.TestCase):
         self.assertNotIn("中国热议", main)
         self.assertNotIn("合成剧甲", main)
         for expected in ("🇨🇳 中国在流行", "网民热议话题（微博）", "📺 热门电视剧", "95K  合成剧甲",
-                         "1.0M  合成电影", "合成中文歌 — 合成歌手", "合成短剧 · 短剧", "smoke-2026-11-27-china"):
+                         "1.1M  合成电影", "合成中文歌 — 合成歌手", "合成短剧 · 短剧", "smoke-2026-11-27-china"):
             self.assertIn(expected, china)
         payload = json.loads(writer.calls[0][1])
         self.assertNotIn("cn_tv", payload)
@@ -308,13 +308,14 @@ class BriefTests(unittest.TestCase):
         brief = build_brief(snapshot, NOW, "smoke-2026-11-27")
         plain = _message_text(brief.parts[0])
         self.assertIn("12K", plain)
-        self.assertIn("合成中国话题（微博）", plain)
+        self.assertNotIn("合成中国话题", plain)  # China has its own message since 2026-11-27.
+        self.assertIn("合成中国话题（微博）", _message_text(brief.china_parts[0]))
         for denied in ("热门的电影", "成人影片"):
             self.assertNotIn(denied, plain)
         table = brief.parts[0].split("<pre>", 1)[1].split("</pre>", 1)[0]
         self.assertNotIn("<a", table)
         self.assertTrue(all(table_width(line) <= 28 for line in table.splitlines()))
-        self.assertEqual(["malaysia", "global", "china", "wiki"], [row["section"] for row in brief.entries])
+        self.assertEqual(["malaysia", "global", "wiki", "china"], [row["section"] for row in brief.entries])
 
     def test_sanitize_strips_links_markdown_and_controls(self):
         self.assertEqual("标题\n\n正文 。", sanitize("## **标题**\n\n\n\n正文 https://x.example/a 。\x07"))

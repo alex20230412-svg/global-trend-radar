@@ -10,6 +10,12 @@
 | D-002 | 2026-11-25 | 使用两个独立仓库：公开 `global-trend-radar`（代码与文档），私有 `global-trend-radar-data`（数据） | Owner 已按此新建两个仓库 |
 | D-003 | 2026-11-25 | 项目名称为 Global Trend Radar（全球热点雷达） | Owner 已按此命名仓库 |
 | D-004 | 2026-11-25 | 所有进度、决定、测试结果、问题都记录在本仓库；改动走分支 + Draft PR，由 Owner 合并 | Owner 原始要求第 9 条 |
+| D-005 | 2026-11-25 | 项目不限行业，先收集全球及马来西亚的流行趋势，优先寻找可由 AI 自动化的商业机会，不预选变现行业 | [Owner 决定](https://github.com/alex20230412-svg/global-trend-radar/issues/4#issuecomment-7167038713) |
+| D-006 | 2026-11-25 | 资讯暂时仅供私人使用，不授权公开频道或对外发布 | [Owner 决定](https://github.com/alex20230412-svg/global-trend-radar/issues/4#issuecomment-7167038713) |
+| D-007 | 2026-11-25 | 当前验证阶段由 Owner 手动触发 AI 收集；暂不开发，不授权定时任务、部署或实际经营试点 | [Owner 决定](https://github.com/alex20230412-svg/global-trend-radar/issues/4#issuecomment-7167038713) |
+| D-008 | 2026-11-25 | 禁止两个 AI 自动循环对话；讨论由 Owner 控制，完成后 WAIT_OWNER | Owner 在 ChatGPT 会话原话：「不要让 AI 自动循环对话」；[ChatGPT 代录](https://github.com/alex20230412-svg/global-trend-radar/issues/2#issuecomment-7165465613)，[Claude 确认](https://github.com/alex20230412-svg/global-trend-radar/issues/2#issuecomment-7165568273) |
+
+D-007 仅约束当前阶段，不取消长期自动化目标。P-001 至 P-008 及后续技术提议仍待批准；验证周期和实际商业试点尚未获批。
 
 ## 提议（待讨论）
 
@@ -26,7 +32,7 @@
 
 ## 待 Owner 提供
 
-- 最关心的热点类别（例如：商品与消费、娱乐、科技 AI、本地社会新闻）
+- 不预选行业（D-005）；后续根据 Owner 对真实资讯的反馈调整优先级。
 - GitHub Billing 设置确认
 - 独立 Telegram Bot 与频道
 

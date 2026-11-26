@@ -54,3 +54,17 @@ GDELT 在全部 5 次运行中都连不上（诊断为 `ConnectTimeout`，8 秒�
 | `apple_music_my` | `rss.marketingtools.apple.com/api/v2/my/music/most-played/25/songs.json` | Apple 官方 Marketing Tools 榜单，不需要 key。robots.txt 只有一行注释，没有规则（Claude 2026-11-26 核查）。只存排名、歌名、歌手、类型和链接，不存封面图。live-check [45772752652](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45772752652)：`ok`，25 条 |
 | `app_store_my` | `rss.marketingtools.apple.com/api/v2/my/apps/top-free/25/apps.json` | 同上。Claude 15:00 前后用浏览器访问曾返回 502/504，live-check 时已恢复：`ok`，25 条 |
 | YouTube 马来西亚热门（已实现、待启用） | YouTube Data API `videos.list?chart=mostPopular&regionCode=MY` | D-013。自 2025-07-21 起榜单条目来自热门音乐、电影和游戏榜。视频元数据只用于当次私聊发送，系统不存储。默认关闭，等待审核、Owner 设置密钥及真实预览。 [变更记录](https://developers.google.com/youtube/data/revision_history#july-10-2025) · [功能说明](youtube.md) |
+## 早报 v5 新来源核查（D-014）
+
+2026-11-26 22:42 MYT 核查了公开政策、robots 和一轮有限的公开端点样本。下列 HTTP 状态和数量来自这次公开探查。Draft PR 的新代码尚未合并，现有 `main` 的 live-check 不含这些适配器，L4 实测留给合并后。 [Issue #33](https://github.com/alex20230412-svg/global-trend-radar/issues/33)
+
+| 候选 | 核查证据 | 本轮配置 |
+| --- | --- | --- |
+| 维基百科马来西亚 `wikipedia_my` | `wikimedia.org/robots.txt` 返回 404，未取得禁止规则。马来西亚 top-per-country 前一天返回 HTTP 200、22 条，核对了 `article`、`project`、`rank`、`views_ceil`。Wikimedia 要求可辨识且可联系的 User-Agent。 | 启用日级数据。保存条目名、浏览量、榜内位次、日期及生成的 Wikipedia 链接。配置可排除常驻词条及命名空间，前一日未发布时试再前一日。 [开放数据说明](https://developer.wikimedia.org/use-content/data/) · [User-Agent 政策](https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy) · [robots.txt](https://wikimedia.org/robots.txt) |
+| 微博 `weibo_archive` | `justjavac/weibo-trending-hot-search` 授权文件为 MIT。官方 GitHub Contents API 的 `raw/2026-11-26.json` 返回 HTTP 200、101 个 `title/url` 项，`Last-Modified` 为 04:53:19 UTC，与最新文件提交 `4ff7be3` 相符，距核查约 10 小时。 | 启用 GitHub 上的公开存档。只读固定仓库与路径，要求时间头且不超过 48 小时。不会请求微博本站。保留排行及规范链接供本人点击。 [存档与许可](https://github.com/justjavac/weibo-trending-hot-search) · [文件变更记录](https://github.com/justjavac/weibo-trending-hot-search/commits/master/raw) |
+| 知乎存档 | `typeofNaN/hot` 的 `zhihu-hot-topic` 及 justjavac 知乎存档候选最后更新在 2025-05。检查的另一 MIT 候选 SnailDev 最后更新为 2026-11-15，超过 48 小时。 | 暂缓，等待新鲜度和许可均能核实的 GitHub 存档。 [typeofNaN/hot](https://github.com/typeofNaN/hot) · [justjavac 候选](https://github.com/justjavac/zhihu-trending-top-search) · [SnailDev 候选](https://github.com/SnailDev/zhihu-hot-hub) |
+| 百度热搜 | `top.baidu.com/robots.txt` 返回 404。一次公开榜单检查找到了数据标记，但数据未能用 JSON 解析器验证。 | 关闭。保留格式未核实结论，今后需证明无需登录、Cookie 或签名即可按规则稳定取数。 [robots.txt](https://top.baidu.com/robots.txt) · [公开榜单](https://top.baidu.com/board?tab=realtime) |
+| B 站热门 | `api.bilibili.com/robots.txt` 返回 200，通用组包含 `Disallow: /`。网页主站规则不构成 API 域名的许可。 | 排除。此次仅取得 robots 证据，热门 API 不请求。 [API robots.txt](https://api.bilibili.com/robots.txt) · [网站 robots.txt](https://www.bilibili.com/robots.txt) |
+| 中新网 `chinanews_rss` | 官网公开 RSS。主机 robots 通用组允许根路径。本轮 RSS HTTP 200，30 条 RSS 记录。 | 启用，复用 RSS 解析，只保存标题、规范链接和时间，链接限定在发布方主机。 [官方 RSS](https://www.chinanews.com.cn/rss/scroll-news.xml) · [robots.txt](https://www.chinanews.com.cn/robots.txt) |
+
+新来源在生产小时槽先写入一次探测标记，成功或失败均不在同一小时重复；维基百科只在前一天无数据时试备用日期。GitHub 存档仅在固定 Contents API 路径使用 Actions 只读凭证。上游失败和存档停更通过来源状态表达，真实响应及条目原文不出现在公开 Actions 日志。

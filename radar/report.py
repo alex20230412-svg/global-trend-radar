@@ -223,14 +223,20 @@ def build_report(observations, coverage, *, now, target_at=None, missed_slots=()
     core = [source for source in coverage.values() if source["kind"] in CORE_KINDS]
     core_success = max((instant(source["last_success_at"]) for source in core if source["last_success_at"]), default=None)
     my_source = next((source for source in core if source["geo"] == "MY" and source["kind"] == "trends"), {})
-    my_degraded = my_source.get("status") not in GOOD
-    degraded = my_degraded or any(source["status"] not in GOOD for source in core)
+    # Sources the Owner has not approved (or switched off) are a scope choice, not an outage.
+    my_inactive = my_source.get("status") in INACTIVE
+    my_degraded = not my_inactive and my_source.get("status") not in GOOD
+    degraded = my_degraded or any(
+        source["status"] not in GOOD for source in core if source["status"] not in INACTIVE
+    )
     delay = math.ceil(max(0.0, (now - target_at).total_seconds()) / 60) if target_at else None
 
     header = [f"数据截至 {_time(now)} · 最近观测 {_time(latest)}"]
     if delay:
         header.append(f"计划 {_time(target_at, short=True)} · 迟到 {delay} 分钟")
-    if my_degraded:
+    if my_inactive:
+        header.append("Google Trends MY 未启用（待核准或关闭），本期不显示马来西亚热搜。")
+    elif my_degraded:
         header.append("⚠️ 降级 · Google Trends MY 当前缺失，马来西亚热搜暂停显示。")
     elif my_source.get("status") == "empty":
         header.append("Google Trends MY 最新响应有效，暂无热词。")
@@ -246,7 +252,7 @@ def build_report(observations, coverage, *, now, target_at=None, missed_slots=()
         markers[trend_key(entry["title"])] = _growth_marker(entry)
     shown = set()
 
-    if not my_degraded:
+    if not my_degraded and not my_inactive:
         lines = []
         for number, entry in enumerate(ranking["malaysia"], 1):
             key = trend_key(entry["title"])

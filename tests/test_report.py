@@ -279,6 +279,19 @@ class ReportTests(unittest.TestCase):
         self.assertIn("待核准 1 个 · 关闭 1 个", result.markdown)
         self.assertIn("Hacker News（失败", result.markdown)
 
+    def test_unapproved_sources_are_scope_not_degradation(self):
+        result = report([observed("Weather only", source="weather", kind="weather", geo="MY",
+                                  valid_from=OLDER.isoformat(), valid_to=(NOW + timedelta(hours=1)).isoformat())], [
+            source_status(status="unapproved"),
+            source_status("bernama", kind="news", status="unapproved"),
+            source_status("weather", kind="weather"),
+        ])
+        self.assertFalse(result.snapshot["degraded"])
+        self.assertNotIn("降级", result.markdown)
+        self.assertIn("Google Trends MY 未启用", result.markdown)
+        self.assertNotIn("🇲🇾", result.markdown)
+        self.assertIn("来源 1/1 正常", result.markdown)
+
     def test_platform_uses_latest_covered_snapshot_and_weather_validity(self):
         hn = {"source": "hn", "kind": "hn", "geo": "GLOBAL"}
         weather = {"source": "weather", "kind": "weather", "geo": "MY", "language": "ms"}

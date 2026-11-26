@@ -94,7 +94,7 @@ class GdeltTests(unittest.TestCase):
             self.assertEqual(request.headers["host"], GDELT_HOST)
             # GDELT routinely needs longer than the 5 s default read timeout.
             self.assertEqual(request.extensions["timeout"]["read"], 20.0)
-            self.assertEqual(request.extensions["timeout"]["connect"], 4.0)
+            self.assertEqual(request.extensions["timeout"]["connect"], 8.0)
         my_params = self.requests[1][0].url.params
         world_params = self.requests[2][0].url.params
         self.assertIn("Malaysia", my_params["query"])

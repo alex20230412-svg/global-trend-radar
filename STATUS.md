@@ -2,12 +2,14 @@
 
 最后更新 2026-11-26 MYT，Claude。
 
-## YouTube 热门 · 已启用，`preview` 实测中（2026-11-26）
+## YouTube 热门 · 已启用，真实预览通过（2026-11-26）
 
 - 按 D-013 接入官方 YouTube Data API 马来西亚 `mostPopular`。条目来自音乐、电影和游戏榜。主早报送达后独立发送一条，视频元数据只在当次进程使用，不进入归档、公开日志或 Gemini。 [Issue #28](https://github.com/alex20230412-svg/global-trend-radar/issues/28) · [功能说明](docs/youtube.md)
 - Windows Python 3.14.4 本地 160 项测试通过，包含原有 137 项和新增 23 项。合成端到端测试核对 Gemini 请求、私库 Mock 的每次写入和公开日志。样本的 YouTube 消息为 1 段、311 个 UTF-16 单元。真实 API、密钥和私聊投递留待后续预览。新增费用 RM0。
 - Claude 审核通过并合并（PR #30）。审核时补了一处：开关关闭时 YouTube 部分完全不动作（不读台账、不写审计），配置格式错误时记为 `invalid_config`。CI 共 162 项通过。
-- Owner 已填 `YOUTUBE_API_KEY`（20:12 MYT）。Claude 开 PR #31，把 `enabled` 改为 `true`，合并后用 `preview` 实测。 [设置步骤](docs/operations.md#youtube-申请-key审核合并后再做)
+- Owner 已填 `YOUTUBE_API_KEY`（20:12 MYT）。Claude 用 PR #31 启用。
+- 真实预览 `preview-2014-2026-11-26`（run 45817775056）：公开日志显示 `report delivery=SENT parts=1`、`youtube status=ok items=18 sent=SENT`。
+- Claude 核对私库：YouTube 台账只有 `payload_hash` 和 `delivery_state`，审计只有状态码和数量；全库搜索没有 YouTube 链接或页脚文字。之后每天 08:30 的早报后会接着发 YouTube 一条。 [设置步骤](docs/operations.md#youtube-申请-key审核合并后再做)
 
 ## 中文早报与阶段 C · 等待 Owner 确认并切换 `c-scheduled`（2026-11-26）
 

@@ -417,6 +417,18 @@ class HttpTests(unittest.TestCase):
                         self.assertTrue(robots.can_fetch(f"https://{host}/v0/item/123.json", USER_AGENT))
                         self.assertFalse(robots.can_fetch(f"https://{host}/v0/item/123.jsonx", USER_AGENT))
 
+    def test_invalid_xml_records_only_parser_class_and_position(self):
+        from radar.sources import _xml
+
+        with self.assertRaises(SourceError) as caught:
+            _xml(b"<rss><channel>SECRET_BODY</rss>")
+        self.assertEqual("invalid_xml", caught.exception.code)
+        self.assertRegex(caught.exception.detail, r"^ParseError:1:[0-9]+$")
+        with self.assertRaises(SourceError) as caught:
+            _xml(b"<!DOCTYPE html><html>SECRET_BODY</html>")
+        self.assertEqual("DTDForbidden", caught.exception.detail)
+        self.assertIsNone(SourceError("network_error", detail="SECRET BODY text").detail)
+
     def test_review_robots_fixture_holds_captured_origin_text(self):
         path = Path(__file__).with_name("fixtures") / "review_robots.json"
         document = json.loads(path.read_text(encoding="utf-8"))

@@ -226,8 +226,12 @@ def _observation(
 def _xml(body):
     try:
         return fromstring(body, forbid_dtd=True, forbid_entities=True, forbid_external=True)
-    except (ParseError, DefusedXmlException, ValueError):
-        raise SourceError("invalid_xml") from None
+    except (ParseError, DefusedXmlException, ValueError) as error:
+        detail = type(error).__name__
+        position = getattr(error, "position", None)
+        if isinstance(position, tuple) and len(position) == 2 and all(type(value) is int for value in position):
+            detail += f":{position[0]}:{position[1]}"
+        raise SourceError("invalid_xml", detail=detail) from None
 
 
 def _ht_field(node, name):

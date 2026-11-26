@@ -14,7 +14,7 @@ from .pipeline import (
     GOOD, MYT, SOURCE_ERROR_CODES, collect_slot, instant, partition, prepare_report, utc_now,
 )
 from .sources import SourceError, SourceItems, collect_source, load_sources
-from .source_http import SourceHttp
+from .source_http import DETAIL, SourceHttp
 from .storage import CODE_REPO, StorageError, _run_git, _write_files, read_json, read_observations
 
 
@@ -74,6 +74,9 @@ class _ProbeResult:
     rows: SourceItems
     http_status: int | None = None
     reason: str | None = None
+    detail: str | None = None
+    body_head: str | None = None
+    body_length: int | None = None
 
     def replay(self):
         if self.reason is not None:
@@ -85,15 +88,46 @@ class _ProbeHttp(SourceHttp):
     """Keep the last adapter request status, including a 200 followed by a parse failure."""
 
     status = None
+    last_body = None
 
     def load(self, url):
         try:
             body = super().load(url)
         except SourceError as error:
             self.status = error.http_status
+            self.last_body = None
             raise
         self.status = 200
+        self.last_body = body
         return body
+
+
+def _body_head(body):
+    """Classify how a response starts without revealing any of its text."""
+    labels = []
+    if body.startswith(b"\xef\xbb\xbf"):
+        labels.append("bom")
+        body = body[3:]
+    if body[:1].isspace():
+        labels.append("leading_space")
+        body = body.lstrip()
+    start = body[:512].lower()
+    if start.startswith(b"<?xml"):
+        labels.append("xml_decl")
+        start = start[start.find(b"?>") + 2:].lstrip() if b"?>" in start else b""
+    if start.startswith(b"<!doctype html") or start.startswith(b"<html"):
+        labels.append("html")
+    elif start.startswith(b"<!doctype"):
+        labels.append("doctype")
+    elif start.startswith(b"<rss") or start.startswith(b"<feed"):
+        labels.append("feed")
+    elif start.startswith(b"<!--"):
+        labels.append("comment")
+    elif not start:
+        labels.append("empty")
+    else:
+        labels.append("other")
+    return "+".join(labels)
 
 
 def _probe_source(source):
@@ -105,9 +139,11 @@ def _probe_source(source):
             rows = collect_source(source, transport)
         except SourceError as error:
             skipped = error.skipped if type(error.skipped) is int and error.skipped >= 0 else 0
+            body = transport.last_body if error.code == "invalid_xml" else None
             return _ProbeResult(
                 SourceItems(skipped=skipped), _http_status(error.http_status) or transport.status,
-                _public_reason(error.code),
+                _public_reason(error.code), getattr(error, "detail", None),
+                _body_head(body) if body is not None else None, len(body) if body is not None else None,
             )
         except Exception:
             return _ProbeResult(SourceItems(), transport.status, "internal_error")
@@ -141,6 +177,15 @@ def _source_line(source_id, state, probe, observed_rows, now):
         f"http={_http_status(probe.http_status) or '-'} newest_age_min={age if age is not None else '-'} "
         f"reason={reason}"
     )
+
+
+def _diagnostic_line(source_id, probe):
+    if re.fullmatch(r"[a-z][a-z0-9_]{0,63}", source_id) is None:
+        raise ValueError("invalid_source_id")
+    detail = probe.detail if probe.detail and DETAIL.fullmatch(probe.detail) else "-"
+    head = probe.body_head if probe.body_head and re.fullmatch(r"[a-z_+]{1,64}", probe.body_head) else "-"
+    length = probe.body_length if type(probe.body_length) is int else "-"
+    return f"diagnostic source={source_id} detail={detail} body={head} length={length}"
 
 
 def _report_line(parts, counts, degraded):
@@ -183,10 +228,13 @@ def run_checks(store, sources, emit, *, probe_gdelt=True, probe=_probe_source, c
     archive = store.read(f"observations/{partition(start)}.jsonl.gz")
     rows = read_observations(store, partition(start), first)
     as_of = clock()
+    diagnostics = []
     for source in active:
         state = first["sources"][source.id] if source.id in approved else {"status": "error", "count": 0}
         result = probes[source.id] if source.id in approved else pending[source.id]
         emit(_source_line(source.id, state, result, (row for row in rows if row["source_id"] == source.id), as_of))
+        if result.reason and result.detail:
+            diagnostics.append(_diagnostic_line(source.id, result))
     if probe_gdelt:
         candidate = next((source for source in sources if source.kind == "gdelt" and not source.enabled), None)
         if candidate is not None:
@@ -194,6 +242,10 @@ def run_checks(store, sources, emit, *, probe_gdelt=True, probe=_probe_source, c
             status = "error" if result.reason else "ok" if result.rows else "empty"
             state = {"status": status, "count": len(result.rows), "skipped": result.rows.skipped}
             emit(_source_line(candidate.id, state, result, result.rows, clock()))
+            if result.reason and result.detail:
+                diagnostics.append(_diagnostic_line(candidate.id, result))
+    for line in diagnostics:
+        emit(line)
 
     second = collect_slot(
         store, sources, approved, start, "live-check-2", fetch=lambda source: probes[source.id].replay(), clock=clock,

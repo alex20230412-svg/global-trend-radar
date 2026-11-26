@@ -34,6 +34,10 @@ SOURCE_LINE = (
     r"source=[a-z0-9_]+ status=(?:ok|empty|error) count=[0-9]+ skipped=[0-9]+ "
     r"http=(?:[1-5][0-9]{2}|-) newest_age_min=(?:[0-9]+|-) reason=[a-z0-9_-]+"
 )
+DIAGNOSTIC_LINE = (
+    r"diagnostic source=[a-z0-9_]+ detail=(?:[A-Z][A-Za-z0-9_]*(?::[0-9]+:[0-9]+)?|-) "
+    r"body=(?:[a-z_+]+|-) length=(?:[0-9]+|-)"
+)
 REPORT_LINE = (
     r"report parts=[0-9]+ chars=(?:[0-9]+(?:,[0-9]+)*|-) my=[0-9]+ other=[0-9]+ fresh=[0-9]+ "
     r"with_context=[0-9]+ local_news=[0-9]+ platforms=[0-9]+ weather=[0-9]+ degraded=(?:true|false)"
@@ -168,6 +172,43 @@ class LiveCheckTests(unittest.TestCase):
         self.assertIn("weather=0 degraded=true", lines[3])
         for sentinel in (TITLE, URL, BODY):
             self.assertNotIn(sentinel, "\n".join(lines))
+
+    def test_parse_and_network_failures_add_content_free_diagnostics(self):
+        html = f"<!DOCTYPE html><html><title>{TITLE}</title>{BODY}</html>".encode()
+
+        def handler(request):
+            host = request.headers["Host"]
+            if request.url.path == "/robots.txt":
+                return httpx.Response(200, stream=httpx.ByteStream(b"User-agent: *\nAllow: /\n"))
+            if host == "www.bernama.com":
+                return httpx.Response(200, stream=httpx.ByteStream(html))
+            raise httpx.ReadTimeout(f"{ERROR} {URL}")
+
+        self._mock_http(handler)
+        with TemporaryDirectory() as directory:
+            lines = []
+            livecheck.run_checks(
+                livecheck._LocalGitStore(directory), [self.news, self.weather], lines.append,
+                probe_gdelt=False, clock=lambda: NOW,
+            )
+        self.assertIn("reason=invalid_xml", lines[0])
+        self.assertIn("reason=network_error", lines[1])
+        self.assertEqual(
+            f"diagnostic source=bernama detail=DTDForbidden body=html length={len(html)}", lines[2],
+        )
+        self.assertEqual("diagnostic source=weather detail=ReadTimeout body=- length=-", lines[3])
+        for line in lines[2:4]:
+            self.assertRegex(line, DIAGNOSTIC_LINE)
+        self.assertRegex(lines[4], REPORT_LINE)
+        for sentinel in (TITLE, URL, BODY, ERROR):
+            self.assertNotIn(sentinel, "\n".join(lines))
+
+    def test_body_head_labels_are_structural_only(self):
+        self.assertEqual("bom+xml_decl+feed", livecheck._body_head(b"\xef\xbb\xbf<?xml version='1.0'?><rss>"))
+        self.assertEqual("leading_space+xml_decl+feed", livecheck._body_head(b"\n <?xml version='1.0'?>\n<rss>"))
+        self.assertEqual("html", livecheck._body_head(b"<!DOCTYPE HTML><html>secret</html>"))
+        self.assertEqual("empty", livecheck._body_head(b""))
+        self.assertEqual("other", livecheck._body_head(b"{\"secret\": 1}"))
 
     def test_main_suppresses_titles_urls_provider_body_and_noisy_exceptions(self):
         def noisy_source(_source, _transport):

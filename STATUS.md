@@ -9,6 +9,7 @@
   - #39：跟随维基的 robots.txt 重定向。
   - #40、#41：按真实预览修正 AI 标签、歌名原文、App 短用途、天气中文、维基首页排除。
   - #42：Gemini 繁忙时等 30 秒再试一次。
+  - #44、#45：热搜标签一律写中文事件，中文标签放宽到 12 个字；出报时也过滤维基首页。最终预览 `preview-2345`：AI 模式（brief-v5.4），30/30 来源正常，全部中文标签。
 - main 上的 live-check [45848775026](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45848775026) 全部通过。新来源结果：
   - `wikipedia_my`：17 条
   - `weibo_archive`：30 条

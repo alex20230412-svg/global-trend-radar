@@ -2,6 +2,16 @@
 
 最后更新 2026-11-27 00:15 MYT，Claude。
 
+## ⚠️ GitHub 定时没有触发（2026-11-27 02:50 MYT）
+
+- Owner 在 23:54 MYT 把 `RADAR_STAGE` 改为 `c-scheduled`。到 02:50 MYT 为止，GitHub 一次都没有启动定时采集：14:17–18:17 UTC 共 5 个时段，连 skipped 记录也没有。上一次定时运行是 13:53 UTC，当时阶段还是 b-manual，所以被跳过。
+- 所以 `health/schedule-start.json` 还没有生成。数据目前来自 00:08 MYT 的手动采集。
+- 已做：
+  - 01:47 MYT 跑 keepalive，重新启用三个工作流（[45870612981](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45870612981)）。
+  - 加后备定时（#50）：日报 08:50、周报周日 09:20。送达过的报告编号不会重发。
+  - c-scheduled 阶段下，手动派发 `send` 产生的是正式的 `daily-YYYY-MM-DD`，08:30 之后可以手动补发。
+- 下一步：08:56 MYT 检查日报。如果没发，手动补一次采集和发送；长期备援要先问 Owner（选项见 HANDOFF）。
+
 ## 🇨🇳 中国在流行 · 已上线（2026-11-27 00:15 MYT）
 
 - D-015：早报不再放中国栏，改为在早报后面静音另发一条「🇨🇳 中国在流行」（#47、#48）。内容：

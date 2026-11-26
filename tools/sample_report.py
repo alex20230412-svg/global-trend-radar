@@ -2,8 +2,9 @@
 
 from datetime import UTC, datetime, timedelta
 
-from radar.delivery import _message_text, _units, split_parts
-from radar.report import ReportBlock, build_report
+from radar.brief import build_brief
+from radar.delivery import _message_text, _units
+from radar.report import build_report
 from radar.sources import load_sources
 
 
@@ -117,9 +118,9 @@ def synthetic_report():
 
 
 def main():
-    notice = "合成样本 · 话题、数据和链接仅用于离线验证"
+    # What the Owner receives when no AI key is available: the plain Chinese brief.
     report = synthetic_report()
-    parts = split_parts([ReportBlock(notice, notice), *report.blocks], label="synthetic-digest")
+    parts = build_brief(report.snapshot, NOW, "synthetic-digest").parts
     print(f"合成日报 · 共 {len(parts)} 段")
     for number, part in enumerate(parts, 1):
         plain = _message_text(part)

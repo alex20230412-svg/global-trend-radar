@@ -1,6 +1,7 @@
 """Validate the new source contracts using synthetic transport and storage only."""
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
 from unittest import TestCase
@@ -19,7 +20,8 @@ NOW = datetime(2026, 11, 26, 4, 53, tzinfo=UTC)
 SOURCE = {source.id: source for source in sources.load_sources()}
 WIKI = SOURCE["wikipedia_my"]
 WEIBO = SOURCE["weibo_archive"]
-CHINA_NEWS = SOURCE["chinanews_rss"]
+# Switched off for display on 2026-11-27 (D-015); the adapter is still tested as if enabled.
+CHINA_NEWS = replace(SOURCE["chinanews_rss"], enabled=True)
 CHINA_RSS = b"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel><title>Synthetic China feed</title>
 <item><title>Mock Chinese article</title>

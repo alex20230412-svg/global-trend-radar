@@ -7,6 +7,7 @@ import sys
 from tempfile import TemporaryDirectory
 
 from .binding import bind_chat, bound_chat_id, confirm_bind
+from .brief import GeminiWriter
 from .delivery import DeliveryError, TelegramClient, reconcile_delivery
 from .diagnostics import diagnostic
 from .pipeline import (
@@ -17,7 +18,7 @@ from .sources import load_sources
 from .storage import CODE_REPO, PrivateGitStore, PublicationError, StorageError, github_object, json_bytes, read_json
 
 
-REPORT_ID = re.compile(r"(?:(?:daily|smoke)-\d{4}-\d{2}-\d{2}|alert-\d{8}T\d{2})\Z")
+REPORT_ID = re.compile(r"(?:(?:daily|smoke|preview-\d{4})-\d{4}-\d{2}-\d{2}|alert-\d{8}T\d{2})\Z")
 DELIVERED = {"SENT", "CONFIRMED"}
 BINDING_ACTIONS = {"bind_chat", "confirm_bind"}
 PUBLIC_ERRORS = {
@@ -87,6 +88,14 @@ def _audit(store, execution, **fields):
     store.publish({f"runs/{execution}.json": json_bytes(fields)}, "Record radar run status")
 
 
+def _writer(env):
+    key = env.get("GEMINI_API_KEY", "")
+    try:
+        return GeminiWriter(key) if key else None
+    except ValueError:
+        return None
+
+
 def _telegram(env, store):
     token = env.get("TELEGRAM_BOT_TOKEN", "")
     chat_id = bound_chat_id(store, token)
@@ -140,7 +149,13 @@ def _report(store, sources, approved, env, execution, created, now, schedule_fro
     requested = env.get("RADAR_REPORT_ID", "")
     if env["GITHUB_EVENT_NAME"] == "schedule" and action != "send":
         raise StorageError("report_operation_invalid")
-    if action == "send":
+    if action == "preview":
+        # A fresh, separately numbered brief for the Owner to check the format at any time.
+        local = now.astimezone(MYT)
+        report_id = f"preview-{local:%H%M}-{local.date().isoformat()}"
+        parts = prepare_report(store, sources, approved, now, report_id, schedule_from=schedule_from,
+                               writer=_writer(env))
+    elif action == "send":
         day = created.astimezone(MYT).date()
         if day != now.astimezone(MYT).date():
             _audit(store, execution, outcome="missed_late", started_at=now.isoformat(), report_day=day.isoformat())
@@ -152,7 +167,7 @@ def _report(store, sources, approved, env, execution, created, now, schedule_fro
             raise StorageError("report_before_target")
         report_id = f"{'smoke' if smoke else 'daily'}-{day.isoformat()}"
         parts = prepare_report(store, sources, approved, now, report_id,
-                               target_at=target, schedule_from=schedule_from)
+                               target_at=target, schedule_from=schedule_from, writer=_writer(env))
     else:
         if action not in {"resume", "confirm_received", "confirm_unsent"} or not REPORT_ID.fullmatch(requested):
             raise StorageError("report_operation_invalid")

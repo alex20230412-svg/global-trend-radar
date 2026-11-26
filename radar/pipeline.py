@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 from html import escape
 
+from .brief import build_brief
 from .delivery import send_parts, split_parts
 from .diagnostics import diagnostic
 from .report import build_report
@@ -265,7 +266,7 @@ def _coverage(timeline, sources, approved, now):
     return coverage
 
 
-def prepare_report(store, sources, approved, now, report_id, *, target_at=None, schedule_from=None):
+def prepare_report(store, sources, approved, now, report_id, *, target_at=None, schedule_from=None, writer=None):
     year, month, day = report_id.rsplit("-", 3)[-3:]
     path = f"reports/{year}/{month}/{day}/{report_id}"
     saved = read_json(store, f"{path}.json")
@@ -289,9 +290,11 @@ def prepare_report(store, sources, approved, now, report_id, *, target_at=None, 
     }
     report = build_report(rows, coverage, now=now, target_at=target_at, missed_slots=missed,
                           historical_coverage=historical_coverage)
-    parts = split_parts([(block.html, block.plain) for block in report.blocks], label=report_id)
+    # The Owner reads a short Chinese brief; the detailed digest stays in the archive.
+    brief = build_brief(report.snapshot, now, report_id, writer)
+    parts = brief.parts
     store.publish({
-        f"{path}.json": json_bytes({"parts": parts, "ranking": report.snapshot,
+        f"{path}.json": json_bytes({"parts": parts, "ranking": report.snapshot, "brief": brief.meta,
                                     "source_ids": sorted({row["source_id"] for row in rows})}),
         f"{path}.md": (report.markdown.rstrip() + "\n").encode(),
         f"health/{year}/{month}/{day}.json": json_bytes(health),

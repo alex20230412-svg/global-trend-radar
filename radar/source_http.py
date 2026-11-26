@@ -33,6 +33,7 @@ HOSTS = frozenset({
     "public.api.bsky.app",
     "mastodon.social",
     "api.data.gov.my",
+    "rss.marketingtools.apple.com",
     GDELT_HOST,
 })
 

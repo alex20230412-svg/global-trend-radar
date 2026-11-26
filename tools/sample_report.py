@@ -79,6 +79,15 @@ def synthetic_report():
         for rank, title in enumerate(titles, 1):
             observe(source, kind, title, geo="GLOBAL", rank=rank)
 
+    for rank, (title, artist) in enumerate((
+        ("示例情歌（合成）", "示例歌手甲"), ("夜市之歌（合成）", "示例乐队乙"), ("雨季练习曲（合成）", "示例歌手丙"),
+    ), 1):
+        observe("apple_music_my", "chart", title, rank=rank, artist=artist, genre="Pop",
+                url=f"https://music.apple.com/my/album/synthetic-{rank}")
+    for rank, (title, genre) in enumerate((("示例记账 App", "Finance"), ("示例外卖 App", "Food & Drink")), 1):
+        observe("app_store_my", "chart", title, rank=rank, genre=genre,
+                url=f"https://apps.apple.com/my/app/synthetic-{rank}")
+
     for rank, (title, hours) in enumerate((
         ("示例区域 A · 雷暴警告", 2),
         ("示例区域 B · 海岸大风警告", 6),

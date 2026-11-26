@@ -395,9 +395,16 @@ def rank_observations(rows, coverage, now, config, historical_coverage):
         key=row_priority, reverse=True,
     )
     social = defaultdict(list)
+    charts = defaultdict(list)
     for item in sorted(current, key=lambda item: (item.rank, item.source, item.key)):
         if item.row["kind"] in {"hn", "bluesky", "mastodon"}:
             social[item.source].append(_topic_entry(item, _first_seen([item]), config))
+        elif item.row["kind"] == "chart":
+            first = _first_seen([item])
+            charts[item.source].append(_topic_entry(
+                item, first, config, artist=item.row.get("artist"), genre=item.row.get("genre"),
+                new_entry=now - window <= first,
+            ))
 
     weather = []
     weather_horizon = now + timedelta(hours=config["weather_lookahead_hours"])
@@ -427,6 +434,7 @@ def rank_observations(rows, coverage, now, config, historical_coverage):
         "rising": rising_rank[:config["rising_limit"]],
         "local_news": [_topic_entry(item, _first_seen([item]), config) for item in local_news[:config["local_news_limit"]]],
         "platforms": {source: items[:config["platform_limit"]] for source, items in sorted(social.items())},
+        "charts": {source: items[:config.get("chart_limit", 10)] for source, items in sorted(charts.items())},
         "weather": weather[:config["weather_limit"]],
         "categories": categories,
     }

@@ -12,6 +12,7 @@
   "new_limit": 5,
   "rising_limit": 5,
   "platform_limit": 3,
+  "chart_limit": 10,
   "weather_limit": 5,
   "weather_lookahead_hours": 24,
   "local_news_limit": 3,

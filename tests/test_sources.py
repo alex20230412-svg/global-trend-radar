@@ -417,6 +417,24 @@ class HttpTests(unittest.TestCase):
                         self.assertTrue(robots.can_fetch(f"https://{host}/v0/item/123.json", USER_AGENT))
                         self.assertFalse(robots.can_fetch(f"https://{host}/v0/item/123.jsonx", USER_AGENT))
 
+    def test_apple_chart_keeps_rank_title_artist_and_genre_only(self):
+        from radar.sources import _chart
+
+        body = json.dumps({"feed": {"results": [
+            {"name": "Song A", "artistName": "Singer", "url": "https://music.apple.com/my/album/a?i=1",
+             "genres": [{"name": "Pop"}, {"name": "Music"}], "artworkUrl100": "https://img.example/a.jpg"},
+            {"name": "Bad link", "artistName": "X", "url": "https://evil.example/x", "genres": []},
+            {"name": "App B", "artistName": "Dev", "url": "https://apps.apple.com/my/app/b/id1",
+             "genres": [{"name": "Finance"}]},
+        ]}}).encode()
+        source = next(item for item in load_sources() if item.id == "apple_music_my")
+        rows = _chart(source, body)
+        self.assertEqual(1, rows.skipped)
+        self.assertEqual([("Song A", 1, "Singer", "Pop"), ("App B", 3, "Dev", "Finance")],
+                         [(row["title"], row["rank"], row["artist"], row["genre"]) for row in rows])
+        self.assertNotIn("artworkUrl100", json.dumps(rows))
+        self.assertNotIn("img.example", json.dumps(rows))
+
     def test_invalid_xml_records_only_parser_class_and_position(self):
         from radar.sources import _xml
 

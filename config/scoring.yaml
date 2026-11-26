@@ -8,6 +8,7 @@
   "minimum_title_chars": 24,
   "my_limit": 10,
   "global_limit": 10,
+  "digest_global_limit": 5,
   "new_limit": 5,
   "rising_limit": 5,
   "platform_limit": 3,

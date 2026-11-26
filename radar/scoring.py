@@ -271,14 +271,26 @@ def _growth(items, media, trend_coverage, valid_slots, config):
     return signals
 
 
+def _context(representative):
+    """First Trends-linked article, present only when the source retains related metadata."""
+    for link in representative.row.get("related") or ():
+        if isinstance(link, dict) and link.get("title") and link.get("url"):
+            return {key: link[key] for key in ("title", "url", "publisher") if link.get(key)}
+    return None
+
+
 def _topic_entry(representative, first_seen, config, **fields):
-    return {
+    entry = {
         **representative.reference(),
         "first_seen_at": first_seen.isoformat(),
         "category": _category(representative, config),
         "algo_version": config["algo_version"],
         **fields,
     }
+    context = _context(representative)
+    if context:
+        entry["context"] = context
+    return entry
 
 
 def _latest(items):
@@ -357,6 +369,7 @@ def rank_observations(rows, coverage, now, config, historical_coverage):
                             for name, value in components.items()},
                 media=[item.reference() for item in local_media.values()],
                 media_covered=local_media_covered,
+                geos=regions,
             ))
         if now - window <= first_seen:
             signals = _growth(items, media, trend_coverage, valid_slots, config)

@@ -4,6 +4,17 @@
 
 ---
 
+## 2026-11-26 · Claude · 阶段 A 收尾修订（PR #8）
+
+- Owner 授权 Claude 本轮直接执行修订。为保持作者清晰、便于 Codex 复核，没有改动 PR #7 分支，而是开叠加在其上的 Draft PR #8（`claude/phase-a-fixes` → `codex/phase-a-trend-collection`）。
+- 日报重写为单段精简格式（`radar/report.py`，`compact-v1`），排名与评分逻辑不变；排名条目新增 `geos`（本地榜）和 `context`（仅在 `retain_related` 批准后存在）。未核准来源不再触发「降级」。
+- 「为什么热」从未接入的临时投影改为 `retain_related` 单一开关，删除 `Report.display_blocks` 及其测试，改为测试保留的相关报道只在话题下显示一次且正确转义。
+- robots fixture 改用 2026-11-26 抓取的 9 个主机原文。阶段 B 手册拆成 Owner 与 AI 两栏。离线 CI 增加打印合成日报一步。
+- 实际测试：PR #8 Linux CI `Ran 99 tests … OK`。本地缺 httpx、feedparser、protego、rapidfuzz 且无法安装，只跑了 delivery 测试与编译。第一次 CI 失败一项：合成样本的相关报道标题里含话题原文，导致去重断言计数为 2，已改样本文字。
+- 未做：来源批准（需 Owner 决定）、阶段 C 的保活与容量策略（已写入 STATUS 待办）、PR #5 合并与 rebase。新增费用 RM0。当前 WAIT_OWNER。
+
+---
+
 ## 2026-11-26 · Codex · PR #7 第一轮审核修订
 
 - 同一分支修正来源审批、词条链接、坏条目容错、跨小时迟到和私有诊断。保留原来的批准范围，天气以外的来源仍为待核准。

@@ -26,3 +26,5 @@ jobs:
           --index-url https://pypi.org/simple --require-hashes --only-binary=:all: -r requirements.lock
       - name: Run synthetic and mocked tests
         run: python -m unittest discover -s tests -v
+      - name: Render the synthetic digest for reviewers
+        run: python -m tools.sample_report

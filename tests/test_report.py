@@ -170,26 +170,57 @@ class RankingTests(unittest.TestCase):
 
 
 class ReportTests(unittest.TestCase):
-    def test_trend_background_is_escaped_and_only_in_display_projection(self):
-        result = report([observed("New shopping festival")])
-        baseline_snapshot = json.dumps(result.snapshot)
-        baseline_markdown = result.markdown
-        baseline_blocks = list(result.blocks)
-        self.assertEqual(baseline_blocks, result.display_blocks())
-
-        display = result.display_blocks({
-            " NEW   shopping festival ": ("Early plans & <sale>", "Synthetic <Daily>"),
-            "Unranked topic": ("Unlisted headline", "Synthetic Daily"),
-        })
-        rendered = "\n".join(block.html for block in display)
+    def test_retained_related_article_explains_the_topic_once(self):
+        result = report([
+            observed("New shopping festival", related=[{
+                "url": "https://news.example/story?x=1&y=2", "title": "Early plans & <sale>",
+                "publisher": "Synthetic <Daily>",
+            }]),
+            observed("New shopping festival", geo="SG", related=[{
+                "url": "https://news.example/story?x=1&y=2", "title": "Early plans & <sale>",
+            }]),
+            observed("Plain topic"),
+        ])
+        rendered = result.markdown
         self.assertEqual(1, rendered.count("Early plans &amp; &lt;sale&gt;"))
-        self.assertIn("Synthetic &lt;Daily&gt;", rendered)
-        self.assertIn("仅当次展示", rendered)
-        self.assertNotIn("Unlisted headline", rendered)
-        self.assertEqual(baseline_snapshot, json.dumps(result.snapshot))
-        self.assertEqual(baseline_markdown, result.markdown)
-        self.assertEqual(baseline_blocks, result.blocks)
-        self.assertNotIn("Early plans", result.markdown)
+        self.assertIn("（Synthetic &lt;Daily&gt;）", rendered)
+        self.assertIn('href="https://news.example/story?x=1&amp;y=2"', rendered)
+        self.assertEqual("Early plans & <sale>", result.snapshot["malaysia"][0]["context"]["title"])
+        self.assertNotIn("context", result.snapshot["malaysia"][1])
+        self.assertEqual(1, rendered.count("↳"))
+
+    def test_each_topic_appears_once_with_growth_and_region_markers(self):
+        result = report([
+            observed("Phone launch", time=OLDER, volume="200+"),
+            observed("Phone launch", volume="5K+"),
+            observed("Phone launch", geo="SG", volume="1K+"),
+            observed("Only abroad", geo="JP", volume="1K+", rank=2),
+            observed("Only abroad", geo="SG", volume="1K+", rank=2),
+        ], [
+            source_status(),
+            source_status("trends_sg", geo="SG"),
+            source_status("trends_jp", geo="JP"),
+        ])
+        plain = "\n".join(block.plain for block in result.blocks)
+        self.assertEqual(1, plain.count("Phone launch"))
+        self.assertEqual(1, plain.count("Only abroad"))
+        self.assertIn("🚀200+→5K+", plain)
+        self.assertIn("也在 SG", plain)
+        self.assertIn("🌏 其他地区热搜", plain)
+        self.assertIn("Only abroad · 🆕 · JP/SG", plain)
+        self.assertNotIn("[en]", plain)
+
+    def test_synthetic_digest_fits_one_telegram_message(self):
+        from radar.delivery import split_parts
+        from tools.sample_report import synthetic_report
+
+        result = synthetic_report()
+        parts = split_parts([(block.html, block.plain) for block in result.blocks], label="daily-2026-11-27")
+        self.assertEqual(1, len(parts))
+        self.assertEqual("compact-v1", result.snapshot["digest_version"])
+        plain = "\n".join(block.plain for block in result.blocks)
+        for title in ("星港购物节公开低耗雾灯新品与折扣", "月湾 AI 课堂助教开放离线多语试用"):
+            self.assertEqual(1, plain.count(title))
 
     def test_render_links_and_escape_external_text_for_telegram(self):
         result = report([observed(
@@ -198,7 +229,6 @@ class ReportTests(unittest.TestCase):
         )])
         self.assertIn("&amp; &lt;b&gt;引号\"&lt;/b&gt; 👩‍💻", result.markdown)
         self.assertIn('href="https://retailer.example/page?x=1&amp;y=2"', result.markdown)
-        self.assertIn('[zh]', result.markdown)
         self.assertIn('新商品 & <b>引号"</b> 👩‍💻', "\n".join(block.plain for block in result.blocks))
         self.assertNotIn("javascript:", report([observed("Fake URL", url="javascript:alert(1)")]).markdown)
         json.dumps(result.snapshot)
@@ -215,6 +245,7 @@ class ReportTests(unittest.TestCase):
         self.assertIn("最近观测 2026-11-26 07:37 MYT", result.markdown)
         self.assertIn("降级 · Google Trends MY 当前缺失", result.markdown)
         self.assertIn("计划采集缺口 1 槽", result.markdown)
+        self.assertIn("Google Trends MY（失败", result.markdown)
         self.assertTrue(result.snapshot["degraded"])
         self.assertNotIn("Earlier topic", result.markdown)
 
@@ -231,10 +262,35 @@ class ReportTests(unittest.TestCase):
         row = observed("New phone")
         missing = report([row], [source_status(), source_status("bernama", kind="news", status="error")])
         empty = report([row], [source_status(), source_status("bernama", kind="news", status="empty")])
-        self.assertIn("本地媒体覆盖缺失", missing.markdown)
+        self.assertIn("Bernama（失败", missing.markdown)
         self.assertIsNone(missing.snapshot["malaysia"][0]["components"]["local_media"])
-        self.assertIn("本地媒体证据 0 家", empty.markdown)
+        self.assertNotIn("Bernama（", empty.markdown)
+        self.assertNotIn("📰", empty.markdown)
         self.assertEqual(0, empty.snapshot["malaysia"][0]["components"]["local_media"])
+
+    def test_footer_counts_only_active_sources(self):
+        result = report([observed("New phone")], [
+            source_status(),
+            source_status("fmt", kind="news", status="unapproved"),
+            source_status("gdelt", kind="gdelt", geo="GLOBAL", status="disabled"),
+            source_status("hn", kind="hn", geo="GLOBAL", status="error"),
+        ])
+        self.assertIn("来源 1/2 正常", result.markdown)
+        self.assertIn("待核准 1 个 · 关闭 1 个", result.markdown)
+        self.assertIn("Hacker News（失败", result.markdown)
+
+    def test_unapproved_sources_are_scope_not_degradation(self):
+        result = report([observed("Weather only", source="weather", kind="weather", geo="MY",
+                                  valid_from=OLDER.isoformat(), valid_to=(NOW + timedelta(hours=1)).isoformat())], [
+            source_status(status="unapproved"),
+            source_status("bernama", kind="news", status="unapproved"),
+            source_status("weather", kind="weather"),
+        ])
+        self.assertFalse(result.snapshot["degraded"])
+        self.assertNotIn("降级", result.markdown)
+        self.assertIn("Google Trends MY 未启用", result.markdown)
+        self.assertNotIn("🇲🇾", result.markdown)
+        self.assertIn("来源 1/1 正常", result.markdown)
 
     def test_platform_uses_latest_covered_snapshot_and_weather_validity(self):
         hn = {"source": "hn", "kind": "hn", "geo": "GLOBAL"}
@@ -253,6 +309,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual([], result.snapshot["malaysia"])
         self.assertEqual("New HN article", result.snapshot["platforms"]["hn"][0]["title"])
         self.assertEqual(["Active warning"], [item["title"] for item in result.snapshot["weather"]])
+        self.assertIn("Hacker News：New HN article", "\n".join(block.plain for block in result.blocks))
         self.assertNotIn("Old HN article", result.markdown)
         self.assertNotIn("Expired warning", result.markdown)
         self.assertIn("CC BY 4.0", result.markdown)
@@ -268,5 +325,5 @@ class ReportTests(unittest.TestCase):
         ])
         self.assertEqual({}, result.snapshot["platforms"])
         self.assertEqual([], result.snapshot["weather"])
-        self.assertIn("Hacker News · 数据过旧", result.markdown)
+        self.assertIn("Hacker News：暂无 · 数据过旧", result.markdown)
         self.assertIn("最新可用响应无有效警告", result.markdown)

@@ -15,7 +15,7 @@ class ChineseSourceTests(unittest.TestCase):
         self.assertIn("www.malaysiakini.com", HOSTS)
         http = Mock()
         http.load.return_value = """
-            <rss version="2.0"><channel><title>合成订阅</title><item>
+            <rss version="2.0"><channel><title>合成订阅</title><language>en-US</language><item>
                 <title>合成新闻</title>
                 <link>https://example.org/news?utm_source=feed</link>
                 <description>正文哨兵</description>
@@ -27,7 +27,7 @@ class ChineseSourceTests(unittest.TestCase):
 
         [row] = collect_source(source, http)
 
-        http.load.assert_called_once_with("https://www.malaysiakini.com/rss/zh/news.rss")
+        http.load.assert_called_once_with("https://www.malaysiakini.com/zh/rss/news.rss")
         self.assertEqual(
             ("malaysiakini_zh", "MY", "zh", "合成新闻", "https://example.org/news",
              "2026-11-26T02:00:00+00:00", "合成媒体"),

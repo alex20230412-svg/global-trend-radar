@@ -16,8 +16,9 @@ CODE_REPO = "alex20230412-svg/global-trend-radar"
 DATA_REPO = "alex20230412-svg/global-trend-radar-data"
 DATA_URL = f"https://github.com/{DATA_REPO}.git"
 DATA_BRANCH = "main"
-WARN_KIB = 256 * 1024
-STOP_KIB = 512 * 1024
+# GitHub recommends repositories stay well under 1 GB.
+WARN_KIB = 700 * 1024
+STOP_KIB = 900 * 1024
 STORE_ROOTS = {"observations", "manifests", "runs", "reports", "deliveries", "health", "first-seen"}
 
 

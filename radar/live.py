@@ -84,6 +84,28 @@ def collect_plan(created_at, scheduled):
     return hour(created_at), None
 
 
+SCHEDULE_START_KEY = "schedule/start.json"
+
+
+def _schedule_start(store, env, operation, created):
+    """RADAR_SCHEDULE_FROM wins; otherwise the first scheduled collection records its own plan."""
+    starts = env.get("RADAR_SCHEDULE_FROM", "")
+    if starts:
+        value = instant(starts)
+    else:
+        saved = read_json(store, SCHEDULE_START_KEY)
+        value = instant(saved["schedule_from"]) if isinstance(saved, dict) and saved.get("schedule_from") else None
+        if (value is None and env.get("RADAR_STAGE") == "c-scheduled" and operation == "collect"
+                and env.get("GITHUB_EVENT_NAME") == "schedule"):
+            value = collect_plan(created, True)[1]
+            store.publish({SCHEDULE_START_KEY: json_bytes({
+                "schedule_from": value.isoformat(), "recorded_at": utc_now().isoformat(),
+            })}, "Record schedule start")
+    if value and (value.minute != 17 or value.second or value.microsecond):
+        raise StorageError("schedule_start_invalid")
+    return value
+
+
 def _audit(store, execution, **fields):
     store.publish({f"runs/{execution}.json": json_bytes(fields)}, "Record radar run status")
 
@@ -217,16 +239,11 @@ def run_live(operation, env):
     else:
         sources = load_sources()
         approved = _approved_sources(sources, env.get("RADAR_APPROVED_SOURCES", ""))
-    starts = env.get("RADAR_SCHEDULE_FROM", "")
-    if env["RADAR_STAGE"] == "c-scheduled" and not starts:
-        raise StorageError("schedule_start_required")
-    schedule_from = instant(starts) if starts else None
-    if schedule_from and (schedule_from.minute != 17 or schedule_from.second or schedule_from.microsecond):
-        raise StorageError("schedule_start_invalid")
     created = queued_at(env)
     with TemporaryDirectory(prefix="radar-private-", dir=env.get("RUNNER_TEMP")) as temp:
         store = PrivateGitStore.clone(temp, env.get("DATA_REPO_TOKEN"))
         now = utc_now()
+        schedule_from = None if binding else _schedule_start(store, env, operation, created)
         try:
             if schedule_from and env["GITHUB_EVENT_NAME"] == "schedule" and created < schedule_from:
                 raise StorageError("schedule_not_started")

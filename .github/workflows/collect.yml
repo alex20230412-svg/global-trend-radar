@@ -2,9 +2,9 @@ name: Radar collect
 
 on:
   workflow_dispatch:
-  # Stage C only. Activate this trigger through an Owner-approved PR.
-  # schedule:
-  #   - cron: '17 * * * *'
+  # Stage C (Owner approved 2026-11-26, Issue #16). Runs only while RADAR_STAGE is c-scheduled.
+  schedule:
+    - cron: '17 * * * *'
 
 permissions:
   contents: read

@@ -176,6 +176,18 @@ def _weather_zh(title):
     return title
 
 
+# A dash with spaces, a full-width bar or colon, ": ", or a dash between Chinese characters.
+# "Wi-Fi Map" keeps its hyphen.
+APP_TAGLINE = re.compile(r"\s+[-–—|｜]\s+|\s*[｜：]\s*|:\s+|(?<=[\u4e00-\u9fff])[-–—](?=[\u4e00-\u9fff])")
+
+
+def _app_name(title):
+    """Store names often carry a tagline: 「红果短剧 - 好内容多品类随心看」 -> (红果短剧, 好内容多品类随心看)."""
+    parts = APP_TAGLINE.split(title, maxsplit=1)
+    name = parts[0].strip()
+    return (name or title), (parts[1].strip() if len(parts) > 1 else "")
+
+
 def _is_sport(entry):
     return entry.get("category") == "体育" or SPORTS.search(str(entry.get("title", ""))) is not None
 
@@ -495,13 +507,14 @@ def _render_sections(items, annotations, previous_keys, sections, headings):
                 shown_title = f"{title} — {row['artist']}" if row.get("artist") else title
             elif section == "cn_apps":
                 # Chinese app names would not survive the ASCII name column.
-                shown_title = f"{title} · {label or row.get('genre') or '用途不明'}"
+                name, tagline = _app_name(title)
+                shown_title = f"{name} · {label or tagline or row.get('genre') or '用途不明'}"
             elif section in HOT_INDEX_SECTIONS:
                 shown_title = title
             table.append(table_row(
                 number, _table_view(section, row), shown_title, metric_width=metric_width,
                 marker=previous_keys is not None and row["key"] not in previous_keys,
-                app_name=title if section == "apps" else None,
+                app_name=_app_name(title)[0] if section == "apps" else None,
                 suffix=f"（{SHORT_LABELS.get(row['source_label'], row['source_label'])}）" if section == "china" else "",
             ))
             explanation = why or row.get("headline") or row.get("artist") or row.get("genre") or ""
@@ -565,7 +578,7 @@ def _format_china(items, now, previous_keys, annotations=None):
     heading = f"🇨🇳 中国在流行 · {_date(now)}（周{'一二三四五六日'[local.weekday()]}）"
     blocks = [(f"<b>{escape(heading)}</b>", heading), table_block(tables)]
     blocks.extend(quote_blocks("原因和详情（点开看）", details))
-    footer = "数据来自微博热搜存档、百度热搜和热门榜、中新网、Apple 中国区榜单"
+    footer = "数据来自微博热搜存档、百度热搜和热门榜、Apple 中国区榜单"
     if annotations is not None:
         footer += "\n热议标签由 AI 整理，可能有误，点 🔗 看原文"
     blocks.append((escape(footer, quote=False), footer))

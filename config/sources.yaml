@@ -223,7 +223,7 @@ sources:
     geo: CN
     language: zh
     url: "https://www.chinanews.com.cn/rss/scroll-news.xml"
-    enabled: true
+    enabled: false  # Owner 2026-11-27: China shows what is popular, not news (D-015).
     retention: long_term
   - id: baidu_hot
     kind: china

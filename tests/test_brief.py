@@ -293,6 +293,19 @@ class BriefTests(unittest.TestCase):
         empty = build_brief({"malaysia": [{"title": "合成话题", "url": "https://example.org/a"}]}, NOW, "smoke-2026-11-27")
         self.assertEqual([], empty.china_parts)
 
+    def test_app_names_drop_store_taglines(self):
+        from radar.brief import _app_name
+        self.assertEqual(("红果短剧", "好内容多品类随心看"), _app_name("红果短剧 - 好内容多品类随心看"))
+        self.assertEqual(("抖音商城", "下单返积分、退货包运费"), _app_name("抖音商城-下单返积分、退货包运费"))
+        self.assertEqual(("WorkBuddy", "AI 办公我帮你"), _app_name("WorkBuddy - AI 办公我帮你"))
+        self.assertEqual(("Shopee", "Shop & Get Vouchers"), _app_name("Shopee: Shop & Get Vouchers"))
+        self.assertEqual(("Wi-Fi Map", ""), _app_name("Wi-Fi Map"))
+        snapshot = {"malaysia": [{"title": "合成话题", "url": "https://example.org/a"}],
+                    "charts": {"app_store_cn": [{"title": "红果短剧 - 好内容多品类随心看",
+                                                 "url": "https://example.org/p"}]}}
+        china = _message_text(build_brief(snapshot, NOW, "smoke-2026-11-27").china_parts[0])
+        self.assertIn("红果短剧 · 好内容多品类随心看", china)
+
     def test_cross_section_alias_urls_and_wiki_adult_filter(self):
         snapshot = {
             "malaysia": [{"title": "新电影", "url": "https://example.org/movie?utm_source=first"}],

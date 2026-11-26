@@ -4,6 +4,14 @@
 
 ---
 
+## 2026-11-26 · Claude · 阶段 B 真实运行通过
+
+- Owner 完成 6 步设置后，Claude 依次触发：`bind_chat`（第一次 `binding_private_start_required`，Owner 补发 `/start` 后 `ACK_SENT`）、collect（24/24，334 条）、`confirm_bind`（`BOUND`）、同小时 collect（跳过全部，`rows_added=0`）、report send（`SENT`，1 段）、同日 send（不重发）。
+- Claude 以临时只读权限核对私库：manifest、run 审计、first-seen 分片、投递台账、日报快照都齐全。公开仓库只记录数量和状态。
+- 实测每小时观测约 76 KB（gzip）。阶段 C 前需要处理容量策略和公开仓库 60 天无活动停用定时任务的问题。
+
+---
+
 ## 2026-11-26 · Claude · 阶段 B 无凭证实测通过
 
 - 依 Owner 指示合并 PR #10（Codex，T1–T5），并在 main 运行 `live-check` 5 次。发现并修复：当今大马英文和中文 RSS 及 MET API 地址变更（301）、中文 RSS 声明的语言错误、GDELT 读取超时（PR #11）；新增只含类名、位置和结构标签的失败诊断（PR #12）；连接超时放宽到 8 秒（PR #13）。

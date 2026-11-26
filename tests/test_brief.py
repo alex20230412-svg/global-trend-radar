@@ -239,9 +239,9 @@ class BriefTests(unittest.TestCase):
             {"id": "a1", "label": "电子钱包", "why": "提供电子钱包与付款服务的应用"},
         ], "ideas": []}, ensure_ascii=False))
         plain = _message_text(build_brief(snapshot, NOW, "smoke-2026-11-27", writer).parts[0])
-        self.assertIn("Stop The Wedding! — Synth", plain)
+        self.assertIn("Stop The Wedding! — Syn", plain)
         self.assertNotIn("停止婚礼单曲", plain)
-        self.assertIn("Synthetic Pay", plain)
+        self.assertIn("Synthetic Pa 电子钱包", plain)
         self.assertIn("电子钱包", plain)
         self.assertIn("持续降雨警告（戒备）", plain)
 

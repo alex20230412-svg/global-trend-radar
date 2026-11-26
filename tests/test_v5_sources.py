@@ -120,7 +120,8 @@ class SourceAdapterTests(TestCase):
         http = self.transport(fake)
         with patch.dict("os.environ", {"RUN_METADATA_TOKEN": token}):
             rows = sources._weibo_archive(WEIBO, http, NOW)
-            for host in ("s.weibo.com", "top.baidu.com", "www.zhihu.com", "api.bilibili.com"):
+            # top.baidu.com is allowed since PR #38 (Owner: 「你自己试看」); the rest stay blocked.
+            for host in ("s.weibo.com", "www.zhihu.com", "api.bilibili.com"):
                 with self.assertRaisesRegex(sources.SourceError, "^url_blocked$"):
                     http.load(f"https://{host}/synthetic")
             with self.assertRaisesRegex(sources.SourceError, "^url_blocked$"):

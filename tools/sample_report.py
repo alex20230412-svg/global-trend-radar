@@ -57,12 +57,18 @@ def synthetic_report():
         for region in regions:
             observe(f"trends_{region.lower()}", "trends", title, geo=region, rank=rank, volume="400+")
 
+    for region in ("JP", "US"):
+        observe(f"trends_{region.lower()}", "trends", "云桥设计周公布桌面光谱仪方案",
+                geo=region, rank=11, volume="2K+")
+
     for source, title in (
-        ("malaysiakini", "白榕社区修理站为家庭开放自行车检修日"),
-        ("malay_mail", "青潮海滨放映周新增低亮无障碍银幕"),
-        ("bernama", "银竹志愿者招募河岸植物清点队"),
+        ("malaysiakini", "Community workshop opens a family bicycle repair day"),
+        ("malaysiakini_zh", "青石社区推出华文儿童科学读书会"),
+        ("malay_mail", "Seaside film week adds a low-light accessible screening"),
+        ("bernama", "Volunteers recruit for a riverside plant survey"),
     ):
-        observe(source, "news", title)
+        observed_at = OBSERVED + timedelta(minutes=1) if source == "malaysiakini_zh" else OBSERVED
+        observe(source, "news", title, at=observed_at, language="zh" if source == "malaysiakini_zh" else "en")
 
     for source, kind, titles in (
         ("bluesky", "bluesky", ("给城市夜鸟设计一份声音地图", "可负担植物染", "低碳野餐话题")),
@@ -79,17 +85,25 @@ def synthetic_report():
         observe("weather", "weather", title, rank=rank, valid_from=OBSERVED.isoformat(),
                 valid_to=(OBSERVED + timedelta(hours=hours)).isoformat())
 
-    present = {item["source_id"] for item in rows}
+    latest = {}
+    for item in rows:
+        key = item["source_id"]
+        latest[key] = max(latest.get(key, ""), item["observed_at"])
+    checked = {
+        source.id: latest.get(source.id, OBSERVED.isoformat()) for source in sources
+        if source.enabled and source.retention == "long_term" and source.id != "mastodon_links"
+    }
     coverage = [
         {
             "source_id": source.id,
             "kind": source.kind,
             "geo": source.geo,
-            "status": ("ok" if source.id in present else "disabled" if not source.enabled
-                       else "error" if source.id == "mastodon_links" else "unapproved"),
+            "status": ("ok" if source.id in latest else "disabled" if not source.enabled
+                       else "unapproved" if source.retention != "long_term"
+                       else "error" if source.id == "mastodon_links" else "empty"),
             "reason": "sample_timeout" if source.id == "mastodon_links" else None,
-            "observed_at": OBSERVED.isoformat() if source.id in present else None,
-            "last_success_at": OBSERVED.isoformat() if source.id in present else None,
+            "observed_at": checked.get(source.id),
+            "last_success_at": checked.get(source.id),
         }
         for source in sources
     ]

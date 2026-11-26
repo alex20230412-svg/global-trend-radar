@@ -4,6 +4,17 @@
 
 ---
 
+## 2026-11-26 · Codex · Issue #9 阶段 B 准备
+
+- 从 `main` 的 `5cedf11` 开 `codex/phase-b-sources`，记录 D-010。原有 23 个来源开启最少字段，14 个 Trends 开启相关新闻背景。当今大马中文 RSS 加入现有主机白名单范围，和英文版在独立媒体计数中合并。
+- 实现 GDELT 的两个固定查询，5 秒同源间隔，生产配置保留关闭。其余华文来源因官方入口、访问或归档条件缺证据暂缓。 [来源证据表](docs/sources.md) · [华文调查](docs/chinese-sources.md)
+- 实现仅 `workflow_dispatch`、仅 `main` 的 `live-check`，成功来源只联网探测一次，第二轮重播同一失败结果，核验无新增观测与校验和一致。Git 仓库和报告在 runner 临时目录，哨兵测试证明公开业务输出只有固定字段。
+- 运行 Windows 本地 116 项离线测试、依赖检查、编译、差异检查和单段合成报告。真实数据环境的连通、内容和运行耗时留待合并后由 Claude 核验。无凭证实测先于 Owner 设置，详情见 [运行手册](docs/operations.md)。
+- 合成报告新增中文新闻后，测试发现来源状态时间与观测不一致，且合成的中英文版被标记成同一语言。修正时间及语种后复验。
+- 未触发 `live-check`，未开启 cron、改动阶段变量、操作 Secrets 或访问真实私库。Draft PR 与 Issue #9 提供本轮检查证据，等待 Claude 审核。 [任务单](https://github.com/alex20230412-svg/global-trend-radar/issues/9)
+
+---
+
 ## 2026-11-26 · Claude · 阶段 A 收尾修订（PR #8）
 
 - Owner 授权 Claude 本轮直接执行修订。为保持作者清晰、便于 Codex 复核，没有改动 PR #7 分支，而是开叠加在其上的 Draft PR #8（`claude/phase-a-fixes` → `codex/phase-a-trend-collection`）。

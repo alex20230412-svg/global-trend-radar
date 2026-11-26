@@ -20,6 +20,7 @@ CORE_KINDS = {"trends", "news"}
 DIGEST_VERSION = "compact-v1"
 SOURCE_NAMES = {
     "malaysiakini": "Malaysiakini",
+    "malaysiakini_zh": "当今大马（中文）",
     "malay_mail": "Malay Mail",
     "fmt": "Free Malaysia Today",
     "bernama": "Bernama",
@@ -37,7 +38,7 @@ CATEGORY_TAGS = {
 }
 INACTIVE = {"disabled", "unapproved"}
 GOOD = {"ok", "empty"}
-UNCOVERED = "未覆盖：马来西亚华文媒体、TikTok、Facebook、Instagram、X；平台榜只代表各自用户群。"
+UNCOVERED = "未覆盖：TikTok、Facebook、Instagram、X；平台榜只代表各自用户群。"
 TITLE_LIMIT = 80
 CONTEXT_LIMIT = 100
 PLATFORM_TITLE_LIMIT = 60
@@ -155,7 +156,7 @@ def _topic_line(number, entry, *, volume=None, regions=None, marker=None):
         text.add(" · " + " · ".join(details))
     context = entry.get("context")
     if isinstance(context, dict) and context.get("title"):
-        text.add("\n   ↳ ")
+        text.add("\n   ↳ 为什么热 · ")
         text.add(_display(context["title"], CONTEXT_LIMIT), url=clean_url(context.get("url")))
         if context.get("publisher"):
             text.add(f"（{_display(context['publisher'], 40)}）")
@@ -207,6 +208,8 @@ def _footer(coverage, missed_slots):
     if missed_slots:
         sample = "、".join(_time(slot, short=True) for slot in missed_slots[-4:])
         lines.append(_line(f"计划采集缺口 {len(missed_slots)} 槽 · 最近 {sample}"))
+    if coverage.get("malaysiakini_zh", {}).get("status") != "ok":
+        lines.append(_line("马来西亚华文来源本期暂无可用数据。"))
     lines.append(_line(UNCOVERED))
     return _section("ℹ️ 来源状态", lines)
 
@@ -251,17 +254,21 @@ def build_report(observations, coverage, *, now, target_at=None, missed_slots=()
     for entry in ranking["rising"]:
         markers[trend_key(entry["title"])] = _growth_marker(entry)
     shown = set()
+    shown_entries = []
+    malaysia_count = 0
 
     if not my_degraded and not my_inactive:
         lines = []
         for number, entry in enumerate(ranking["malaysia"], 1):
             key = trend_key(entry["title"])
             shown.add(key)
+            shown_entries.append(entry)
             regions = _regions(entry.get("geos") or (), exclude="MY")
             lines.append(_topic_line(
                 number, entry, volume=entry.get("volume_raw"), marker=markers.get(key),
                 regions=f"也在 {regions}" if regions else None,
             ).block())
+        malaysia_count = len(lines)
         if not lines and my_source.get("status") != "empty":
             lines.append(_line("本报告窗口没有合格观测。"))
         if lines:
@@ -273,6 +280,7 @@ def build_report(observations, coverage, *, now, target_at=None, missed_slots=()
         if key in shown or len(extra) >= config.get("digest_global_limit", 5):
             continue
         shown.add(key)
+        shown_entries.append(entry)
         extra.append(_topic_line(
             len(extra) + 1, entry, marker=markers.get(key), regions=_regions(entry["geos"]),
         ).block())
@@ -285,6 +293,7 @@ def build_report(observations, coverage, *, now, target_at=None, missed_slots=()
         if key in shown:
             continue
         shown.add(key)
+        shown_entries.append(entry)
         fresh.append(_topic_line(
             len(fresh) + 1, entry, marker=markers.get(key), regions=_regions(entry["geos"]),
         ).block())
@@ -299,6 +308,7 @@ def build_report(observations, coverage, *, now, target_at=None, missed_slots=()
         blocks.append(_section("📰 马来西亚本地新闻", news))
 
     platforms = []
+    platform_count = 0
     for source in sorted(coverage.values(), key=lambda item: (item["kind"], _label(item), item["source_id"])):
         if source["kind"] not in {"bluesky", "mastodon", "hn"} or source["status"] in INACTIVE:
             continue
@@ -306,6 +316,8 @@ def build_report(observations, coverage, *, now, target_at=None, missed_slots=()
         text = _Text().add(f"{_label(source)}：")
         if not items:
             text.add(f"暂无 · {STATUS_NAMES.get(source['status'], '状态不明')}")
+        else:
+            platform_count += 1
         for index, entry in enumerate(items):
             if index:
                 text.add(" / ")
@@ -339,6 +351,13 @@ def build_report(observations, coverage, *, now, target_at=None, missed_slots=()
         "last_core_success_at": core_success.isoformat() if core_success else None,
         "target_at": target_at.isoformat() if target_at else None,
         "delay_minutes": delay,
+        "rendered_counts": {
+            "my": malaysia_count, "other": len(extra),
+            "fresh": sum(trend_key(entry["title"]) in markers for entry in shown_entries),
+            "with_context": sum(bool((entry.get("context") or {}).get("title")) for entry in shown_entries),
+            "local_news": len(ranking["local_news"]), "platforms": platform_count,
+            "weather": len(ranking["weather"]),
+        },
         "coverage": list(coverage.values()),
         "degraded": degraded,
         "missed_slots": [slot.isoformat() for slot in missed],

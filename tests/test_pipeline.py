@@ -200,15 +200,12 @@ class IsolationTests(unittest.TestCase):
 
     def test_unapproved_sources_fail_closed(self):
         sources = load_sources()
-        self.assertEqual(live._approved_sources(sources), {"weather"})
+        expected = {source.id for source in sources if source.enabled}
+        self.assertIn("trends_my", expected)
+        self.assertEqual(live._approved_sources(sources), expected)
         self.assertEqual(live._approved_sources(sources, "weather"), {"weather"})
-        reviewed = [
-            Source("trends_my", "trends", "MY", "und", "https://example.org", True, "long_term"),
-            *sources,
-        ]
-        self.assertEqual(live._approved_sources(reviewed), {"weather", "trends_my"})
-        self.assertEqual(live._approved_sources(reviewed, "trends_my"), {"trends_my"})
-        for candidate in ("trends_my", "weather other_source", "gdelt"):
+        self.assertEqual(live._approved_sources(sources, "trends_my"), {"trends_my"})
+        for candidate in ("weather other_source", "gdelt"):
             with self.subTest(candidate=candidate), self.assertRaises(storage.StorageError):
                 live._approved_sources(sources, candidate)
 

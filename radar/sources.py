@@ -35,8 +35,8 @@ GDELT_QUERIES = (
     '(world OR international OR global OR economy OR technology OR climate)',
 )
 SITE_ENDPOINTS = {
-    "malaysiakini": ("news", "https://www.malaysiakini.com/rss/en/news.rss"),
-    "malaysiakini_zh": ("news", "https://www.malaysiakini.com/rss/zh/news.rss"),
+    "malaysiakini": ("news", "https://www.malaysiakini.com/en/rss/news.rss"),
+    "malaysiakini_zh": ("news", "https://www.malaysiakini.com/zh/rss/news.rss"),
     "malay_mail": ("news", "https://www.malaymail.com/feed/rss/malaysia"),
     "fmt": ("news", "https://cms.freemalaysiatoday.com/feed"),
     "bernama": ("news", "https://www.bernama.com/en/rssfeed.php"),
@@ -44,7 +44,7 @@ SITE_ENDPOINTS = {
     "bluesky": ("bluesky", "https://public.api.bsky.app/xrpc/app.bsky.unspecced.getTrendingTopics?limit=10"),
     "mastodon_tags": ("mastodon", "https://mastodon.social/api/v1/trends/tags?limit=10"),
     "mastodon_links": ("mastodon", "https://mastodon.social/api/v1/trends/links?limit=10"),
-    "weather": ("weather", "https://api.data.gov.my/weather/warning?limit=50&sort=-warning_issue__issued"),
+    "weather": ("weather", "https://api.data.gov.my/weather/warning/?limit=50&sort=-warning_issue__issued"),
     "gdelt": ("gdelt", GDELT_URL),
 }
 TRACKERS = {"fbclid", "gclid", "dclid", "msclkid", "igshid", "mc_cid", "mc_eid", "mkt_tok"}
@@ -310,6 +310,10 @@ def _news(source, body):
         published_at = datetime.fromtimestamp(timegm(date), UTC).isoformat() if date else None
         language = entry.get("language") or feed.feed.get("language")
         if not isinstance(language, str) or not re.fullmatch(r"[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*", language):
+            language = source.language
+        elif source.language != "und" and language.split("-")[0].lower() != source.language.split("-")[0].lower():
+            # Some editions reuse a template that declares the wrong language (the Chinese
+            # Malaysiakini feed says en-US). A feed may refine, but not contradict, the config.
             language = source.language
         # Preserve a factual syndication label when the feed exposes a source;
         # descriptions, author details and full text are never stored.

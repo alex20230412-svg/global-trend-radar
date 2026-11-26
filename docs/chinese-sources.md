@@ -4,7 +4,7 @@
 
 | 媒体 | 官方订阅证据和访问规则 | 本轮结论 |
 | --- | --- | --- |
-| 当今大马中文版 | 中文官网明确声明新闻 RSS `https://www.malaysiakini.com/rss/zh/news.rss`。同一主机 `robots.txt` 返回 200，通用组允许该路径并指定 1 秒间隔。英语和中文服务条款均保留编辑内容复制及在线使用的权利。 [中文官网](https://www.malaysiakini.com/zh) · [robots.txt](https://www.malaysiakini.com/robots.txt) · [中文条款](https://m8.malaysiakini.com/zh/terms/) · [英文条款](https://www.malaysiakini.com/en/about/terms-of-service) | 接入 D-010 已批准发布方的中文新闻订阅，供 Owner 私用。保留标题、规范链接、时间及媒体名等元数据。RSS 开放不扩张发布方权利。两语版在趋势评分中只计一家媒体，新闻栏目可展示语言不同的条目。 |
+| 当今大马中文版 | 中文官网明确声明新闻 RSS `https://www.malaysiakini.com/zh/rss/news.rss`。同一主机 `robots.txt` 返回 200，通用组允许该路径并指定 1 秒间隔。英语和中文服务条款均保留编辑内容复制及在线使用的权利。 [中文官网](https://www.malaysiakini.com/zh) · [robots.txt](https://www.malaysiakini.com/robots.txt) · [中文条款](https://m8.malaysiakini.com/zh/terms/) · [英文条款](https://www.malaysiakini.com/en/about/terms-of-service) | 接入 D-010 已批准发布方的中文新闻订阅，供 Owner 私用。保留标题、规范链接、时间及媒体名等元数据。RSS 开放不扩张发布方权利。两语版在趋势评分中只计一家媒体，新闻栏目可展示语言不同的条目。 |
 | 星洲日报 | 未核实官方公开 RSS 或 API；官网和 robots 核查均得到 403。集团公布的隐私政策并未许可归档新闻。 [官网](https://www.sinchew.com.my/) · [robots.txt](https://www.sinchew.com.my/robots.txt) · [集团隐私政策](https://guangming.com.my/privacy) | 不接入。 |
 | 中国报 | 未核实由官网声明的 RSS 或 API。官网和 robots 核查均得到 403，未核实适用的订阅条款。 [官网](https://www.chinapress.com.my/) · [robots.txt](https://www.chinapress.com.my/robots.txt) · [集团官方资料](https://www.mediachinesegroup.com/wp-content/uploads/2024/05/e_00685_final-results-announcement_20240528.pdf) | 不接入。 |
 | 东方日报 | 官网可读，未发现 RSS 自发现或发布方提供的订阅说明。robots 通用组禁止预览、最新电子报及 App 等路径，因无订阅 URL 无法核验具体 RSS 路径。使用条款保留复制及使用内容的权利。 [官网](https://www.orientaldaily.com.my/) · [robots.txt](https://www.orientaldaily.com.my/robots.txt) · [使用条款](https://www.orientaldaily.com.my/terms) | 不接入。 |

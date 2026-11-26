@@ -18,6 +18,7 @@ RETRY_SECONDS = 10
 MIN_INTERVAL = 0.5
 GDELT_HOST = "api.gdeltproject.org"
 ORIGIN_MIN_INTERVALS = {GDELT_HOST: 5.0}
+ORIGIN_READ_TIMEOUTS = {GDELT_HOST: 20.0}
 HOSTS = frozenset({
     "trends.google.com",
     "www.malaysiakini.com",
@@ -175,13 +176,16 @@ class SourceHttp:
         # verification against the named origin. Payload URLs never enter this path.
         address = self.addresses[target.host]
         url = target.copy_with(host=address)
-        deadline = self.clock() + 12
+        read_timeout = ORIGIN_READ_TIMEOUTS.get(target.host)
+        options = {"timeout": httpx.Timeout(read_timeout, connect=4.0)} if read_timeout else {}
+        deadline = self.clock() + max(12, (read_timeout or 0) + 5)
         try:
             with self.client.stream(
                 "GET", url,
                 headers={"User-Agent": USER_AGENT, "Host": target.host, "Accept-Encoding": "identity"},
                 extensions={"sni_hostname": target.host},
                 follow_redirects=False,
+                **options,
             ) as response:
                 if response.status_code != 200:
                     raise SourceError(

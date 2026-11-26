@@ -117,14 +117,14 @@ sources:
     kind: news
     geo: MY
     language: en
-    url: "https://www.malaysiakini.com/rss/en/news.rss"
+    url: "https://www.malaysiakini.com/en/rss/news.rss"
     enabled: true
     retention: long_term
   - id: malaysiakini_zh
     kind: news
     geo: MY
     language: zh
-    url: "https://www.malaysiakini.com/rss/zh/news.rss"
+    url: "https://www.malaysiakini.com/zh/rss/news.rss"
     enabled: true
     retention: long_term
   - id: malay_mail
@@ -180,7 +180,7 @@ sources:
     kind: weather
     geo: MY
     language: und
-    url: "https://api.data.gov.my/weather/warning?limit=50&sort=-warning_issue__issued"
+    url: "https://api.data.gov.my/weather/warning/?limit=50&sort=-warning_issue__issued"
     enabled: true
     retention: long_term
   - id: gdelt

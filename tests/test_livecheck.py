@@ -151,7 +151,7 @@ class LiveCheckTests(unittest.TestCase):
         self.assertCountEqual(
             [("trends.google.com", "/robots.txt"), ("trends.google.com", "/trending/rss"),
              ("www.bernama.com", "/robots.txt"), ("www.bernama.com", "/en/rssfeed.php"),
-             ("api.data.gov.my", "/robots.txt"), ("api.data.gov.my", "/weather/warning")],
+             ("api.data.gov.my", "/robots.txt"), ("api.data.gov.my", "/weather/warning/")],
             requests,
         )
         self.assertEqual(

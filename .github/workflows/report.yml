@@ -68,6 +68,7 @@ jobs:
           DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           RADAR_REPORT_ACTION: ${{ inputs.action }}
           RADAR_REPORT_ID: ${{ inputs.report_id }}
           RADAR_PART_NO: ${{ inputs.part_no }}

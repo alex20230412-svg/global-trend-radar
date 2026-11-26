@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 
 from .binding import bind_chat, bound_chat_id, confirm_bind
 from .brief import GeminiWriter, UnavailableWriter
-from .delivery import DeliveryError, TelegramClient, reconcile_delivery
+from .delivery import DeliveryError, TelegramClient, reconcile_delivery, send_parts
 from .diagnostics import diagnostic
 from .pipeline import (
     MYT, collect_slot, deliver, delivery_callbacks, hour, instant, prepare_report,
@@ -16,6 +16,7 @@ from .pipeline import (
 )
 from .sources import load_sources
 from .storage import CODE_REPO, PrivateGitStore, PublicationError, StorageError, github_object, json_bytes, read_json
+from .youtube import fetch_youtube, load_youtube_config, render_youtube
 
 
 REPORT_ID = re.compile(r"(?:(?:daily|smoke|preview-\d{4})-\d{4}-\d{2}-\d{2}|alert-\d{8}T\d{2})\Z")
@@ -168,6 +169,56 @@ def _frozen_payload(store, report_id, approved):
     return payload["parts"]
 
 
+def _send_youtube_supplement(store, execution, report_id, main_status, telegram, raw_key):
+    """Isolate the one-shot supplement from the saved brief and its delivery result."""
+    code, items, sent = "invalid_payload", 0, "NOT_SENT"
+    audit_safe = True
+    delivery_id = report_id + "-youtube"
+    ledger_key = f"deliveries/{delivery_id}.json"
+
+    def save_attempt(_report_id, ledger):
+        part = ledger["parts"][0]
+        store.publish({ledger_key: json_bytes({
+            "payload_hash": part["payload_hash"], "delivery_state": part["delivery_state"],
+        })}, "Record YouTube delivery state")
+
+    try:
+        # While disabled the supplement is a no-op: no ledger read and no audit write.
+        try:
+            config = load_youtube_config()
+        except ValueError:
+            config, code = None, "invalid_config"
+        if config is None:
+            pass
+        elif not config.enabled:
+            code = "disabled"
+        elif main_status not in DELIVERED:
+            code = "main_not_sent"
+        elif store.read(ledger_key) is not None:
+            code = "already_attempted"
+        else:
+            result = fetch_youtube(config, raw_key)
+            code, items = result.status, len(result.videos)
+            if code == "ok" and items:
+                message = render_youtube(result.videos)
+                sent = "UNKNOWN"
+                # The shared writer lock serializes the existence check and this publish-before-send.
+                sent = send_parts(delivery_id, [message], telegram, lambda _: None, save_attempt,
+                                  retry_rate_limit=False)
+    except PublicationError:
+        # A failed push can leave local commits ahead of the remote. Do not publish again.
+        audit_safe = False
+    except Exception:
+        # Provider data and delivery exceptions are never copied to logs or the audit.
+        pass
+    print(f"youtube status={code} items={items} sent={sent}")
+    if audit_safe and code != "disabled":
+        try:
+            _audit(store, f"{execution}-youtube", status=code, items=items, sent=sent)
+        except Exception:
+            pass
+
+
 def _report(store, sources, approved, env, execution, created, now, schedule_from):
     action = env.get("RADAR_REPORT_ACTION") or "send"
     requested = env.get("RADAR_REPORT_ID", "")
@@ -184,6 +235,7 @@ def _report(store, sources, approved, env, execution, created, now, schedule_fro
         if day != now.astimezone(MYT).date():
             _audit(store, execution, outcome="missed_late", started_at=now.isoformat(), report_day=day.isoformat())
             print("report outcome=missed_late")
+            print("youtube status=main_not_sent items=0 sent=NOT_SENT")
             return 1
         smoke = env["RADAR_STAGE"] == "b-manual"
         target = None if smoke else datetime.combine(day, time(8, 30), tzinfo=MYT)
@@ -213,10 +265,13 @@ def _report(store, sources, approved, env, execution, created, now, schedule_fro
             _audit(store, execution, outcome=action, started_at=now.isoformat(), report_id=report_id, part=number)
             print("report outcome=reconciled")
             return 0
-    status = deliver(store, report_id, parts, _telegram(env, store))
+    telegram = _telegram(env, store)
+    status = deliver(store, report_id, parts, telegram)
     _audit(store, execution, outcome=status, started_at=now.isoformat(), report_id=report_id,
            ended_at=utc_now().isoformat(), parts=len(parts))
     print(f"report delivery={status} parts={len(parts)}")
+    if not report_id.startswith("alert-"):
+        _send_youtube_supplement(store, execution, report_id, status, telegram, env.get("YOUTUBE_API_KEY", ""))
     return int(status not in DELIVERED)
 
 

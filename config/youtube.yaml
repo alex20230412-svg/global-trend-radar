@@ -1,0 +1,5 @@
+# Wait for review, an Owner-provided key, and a separate activation PR.
+enabled: false
+region: MY
+max_results: 25
+per_category: 5

@@ -2,17 +2,12 @@
 
 最后更新 2026-11-26 MYT，Claude。
 
-## YouTube 热门 · 已派给 Codex（2026-11-26）
+## YouTube 热门 · 已审核合并，默认关闭，等 Owner 填 key（2026-11-26）
 
-- Owner 要求加入 YouTube 资讯（D-013）。任务单见 [Issue #28](https://github.com/alex20230412-svg/global-trend-radar/issues/28)。
-  - 来源：官方 YouTube Data API `mostPopular`，马来西亚榜。2025-07-21 起只含音乐、电影、游戏。
-  - 只发送、不存储：YouTube 政策规定这类数据最多保存 30 天，私库是 git，无法真正删除。
-- 流程：
-  1. Codex 开发，提交 Draft PR；
-  2. Claude 审核后合并，此时默认关闭；
-  3. Owner 填 `YOUTUBE_API_KEY`；
-  4. Claude 开启并实测。
-- 现有早报和阶段 C 不受影响。新增费用 RM0。
+- 按 D-013 接入官方 YouTube Data API 马来西亚 `mostPopular`。条目来自音乐、电影和游戏榜。主早报送达后独立发送一条，视频元数据只在当次进程使用，不进入归档、公开日志或 Gemini。 [Issue #28](https://github.com/alex20230412-svg/global-trend-radar/issues/28) · [功能说明](docs/youtube.md)
+- Windows Python 3.14.4 本地 160 项测试通过，包含原有 137 项和新增 23 项。合成端到端测试核对 Gemini 请求、私库 Mock 的每次写入和公开日志。样本的 YouTube 消息为 1 段、311 个 UTF-16 单元。真实 API、密钥和私聊投递留待后续预览。新增费用 RM0。
+- Claude 审核通过并合并（PR #30）。审核时补了一处：开关关闭时 YouTube 部分完全不动作（不读台账、不写审计），配置格式错误时记为 `invalid_config`。CI 共 162 项通过。
+- 配置仍为 `enabled: false`，现有早报行为不变。下一步：Owner 填 `YOUTUBE_API_KEY`，Claude 用独立 PR 启用并通过 `preview` 实测。 [设置步骤](docs/operations.md#youtube-申请-key审核合并后再做)
 
 ## 中文早报与阶段 C · 等待 Owner 确认并切换 `c-scheduled`（2026-11-26）
 

@@ -4,6 +4,29 @@
 
 ---
 
+## 2026-11-26 · Claude · 审核并合并 YouTube（PR #30）
+
+- 逐项对照 Issue #28 审核：
+  - 只用官方 `videos.list`，key 只放请求头；
+  - 不跟随重定向，响应上限 1 MiB，ID 格式校验，链接由代码生成，标题保留原文；
+  - 独立消息，最多发一次；台账只存 hash 和状态；
+  - 不进 Gemini、归档或日志；只有 report 工作流拿到 key，git 子进程会清除它。
+  - 测试数据全部是合成的。
+- 补一处修正（Claude 提交）：先检查开关。关闭时不读台账、不写审计，系统行为与合并前一致。配置格式错误时状态为 `invalid_config`（原本误记为 `invalid_payload`）。新增 2 项测试，CI 162 项通过。
+- 未核实：`docs/operations.md` 引用的 Google Cloud 密钥指南链接（docs.cloud.google.com）。
+- 下一步：Owner 按 docs/operations.md 申请 `YOUTUBE_API_KEY`；Claude 开 PR 把 `enabled` 改为 `true`，跑 `preview` 实测。
+
+---
+
+## 2026-11-26 · Codex · 实现 YouTube 马来西亚热门
+
+- 从当时最新 `main` 的 `f9dacdd` 开 `codex/youtube-trending`，实现 Issue #28 的官方 API、原文分组显示及独立 Telegram 投递。采用 D-013，保留 `enabled: false`。 [任务单](https://github.com/alex20230412-svg/global-trend-radar/issues/28)
+- 主早报送达后才处理 YouTube。相同报告编号只尝试投递一次，私库仅留哈希、投递状态和汇总，视频字段不写归档、日志或 Gemini。仅报告工作流传入密钥。
+- 实际执行 `.venv/Scripts/python.exe -X utf8 -m unittest discover -s tests -q`，160 项通过。依赖一致性、编译及差异检查通过。`python -m tools.sample_report` 输出一条 311 UTF-16 单元的合成 YouTube 消息。Git 发布失败、429 或 Telegram 送达不明的 Mock 均保留主早报退出码，已有投递台账时跳过重跑。
+- 测试、PR 样本均使用合成数据，真实 API、密钥和私聊待验。新增费用 RM0。Claude 按任务单审核合并后，再按手册安排密钥及独立启用 PR。 [运行手册](docs/operations.md)
+
+---
+
 ## 2026-11-26 · Claude · YouTube 任务单
 
 - 早报 brief-v4 已合并（#27）。最新预览 `preview-1527-2026-11-26` 全部中文：App 写明用途，热门话题附搜索量，26/26 来源正常。

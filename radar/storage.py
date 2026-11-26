@@ -110,7 +110,8 @@ class PrivateGitStore:
         size = private_repository_size(token)
         root = Path(parent) / "private-data"
         git_env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
-        for key in ("DATA_REPO_TOKEN", "TELEGRAM_BOT_TOKEN", "RUN_METADATA_TOKEN", "GEMINI_API_KEY"):
+        for key in ("DATA_REPO_TOKEN", "TELEGRAM_BOT_TOKEN", "RUN_METADATA_TOKEN", "GEMINI_API_KEY",
+                    "YOUTUBE_API_KEY"):
             git_env.pop(key, None)
         credential = base64.b64encode(f"x-access-token:{token}".encode()).decode()
         git_env.update({

@@ -4,6 +4,20 @@
 
 ---
 
+## 2026-11-26 · Claude · 审核并合并 YouTube（PR #30）
+
+- 逐项对照 Issue #28 审核：
+  - 只用官方 `videos.list`，key 只放请求头；
+  - 不跟随重定向，响应上限 1 MiB，ID 格式校验，链接由代码生成，标题保留原文；
+  - 独立消息，最多发一次；台账只存 hash 和状态；
+  - 不进 Gemini、归档或日志；只有 report 工作流拿到 key，git 子进程会清除它。
+  - 测试数据全部是合成的。
+- 补一处修正（Claude 提交）：先检查开关。关闭时不读台账、不写审计，系统行为与合并前一致。配置格式错误时状态为 `invalid_config`（原本误记为 `invalid_payload`）。新增 2 项测试，CI 162 项通过。
+- 未核实：`docs/operations.md` 引用的 Google Cloud 密钥指南链接（docs.cloud.google.com）。
+- 下一步：Owner 按 docs/operations.md 申请 `YOUTUBE_API_KEY`；Claude 开 PR 把 `enabled` 改为 `true`，跑 `preview` 实测。
+
+---
+
 ## 2026-11-26 · Codex · 实现 YouTube 马来西亚热门
 
 - 从当时最新 `main` 的 `f9dacdd` 开 `codex/youtube-trending`，实现 Issue #28 的官方 API、原文分组显示及独立 Telegram 投递。采用 D-013，保留 `enabled: false`。 [任务单](https://github.com/alex20230412-svg/global-trend-radar/issues/28)

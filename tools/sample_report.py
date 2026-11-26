@@ -6,6 +6,7 @@ from radar.brief import build_brief
 from radar.delivery import _message_text, _units
 from radar.report import build_report
 from radar.sources import load_sources
+from radar.youtube import YouTubeVideo, render_youtube
 
 
 NOW = datetime(2026, 11, 27, 0, 37, tzinfo=UTC)
@@ -135,6 +136,15 @@ def main():
         plain = _message_text(part)
         print(f"\n第 {number} 段 · {len(plain)} 字符 · {_units(plain)} UTF-16 单元")
         print(plain)
+
+    youtube = render_youtube((
+        YouTubeVideo("AAAAAAAAAAA", "示例视频 A · 雨季练习曲", "示例频道甲", "10", 1_234_567),
+        YouTubeVideo("BBBBBBBBBBB", "Synthetic Video B: Night Market Quest", "Example Gaming Channel", "20", 24_680),
+        YouTubeVideo("CCCCCCCCCCC", '示例视频 C · "月湾故事"预告', "示例电影频道 & 朋友", "44", 985),
+    ))
+    youtube_plain = _message_text(youtube)
+    print(f"\n合成 YouTube 消息 · 1 段 · {_units(youtube_plain)} UTF-16 单元")
+    print(youtube_plain)
 
 
 if __name__ == "__main__":

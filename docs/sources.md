@@ -32,7 +32,7 @@
 
 - D-010 是 Owner 对私人用途及字段范围的批准。官方 RSS 入口与 robots 许可并不自行授予转载或公开再分发权。新闻只保留元数据，保留原始链接。新增来源须核实官方入口、robots 与条款，耗时或许可不明即暂缓。删除 Git 文件后历史版本仍可能保留。
 - 24 个启用接口每轮约 54 次数据请求，加各域 robots 与受限重试。GDELT 的两次查询属于隔离探针。固定来源、禁重定向。401/403 停止，429 按 `Retry-After` 或更严格的站点规则退避。
-- 华文新增当今大马一个出版社。其余候选的官方 RSS、访问或使用条件仍有缺口。商品趋势代表现有来源信号，尚无销量。TikTok、Facebook、Instagram、Threads、X、YouTube 和 Wikipedia 本轮未接入。 [华文来源调查](chinese-sources.md)
+- 华文新增当今大马一个出版社。其余候选的官方 RSS、访问或使用条件仍有缺口。商品趋势代表现有来源信号，尚无销量。YouTube 已实现并默认关闭，TikTok、Facebook、Instagram、Threads、X 和 Wikipedia 尚未接入。 [华文来源调查](chinese-sources.md) · [YouTube 功能说明](youtube.md)
 - 默认分支确有 Actions 实跑与 L1–L3 证据时，逐源更新证据等级。合成样本与本轮静态调查只用于离线验收和来源筛选。 [历史方案](PLAN.md)
 
 ## 实测记录（无凭证 live-check，main，GitHub Actions ubuntu-24.04）
@@ -53,4 +53,4 @@ GDELT 在全部 5 次运行中都连不上（诊断为 `ConnectTimeout`，8 秒�
 | --- | --- | --- |
 | `apple_music_my` | `rss.marketingtools.apple.com/api/v2/my/music/most-played/25/songs.json` | Apple 官方 Marketing Tools 榜单，不需要 key。robots.txt 只有一行注释，没有规则（Claude 2026-11-26 核查）。只存排名、歌名、歌手、类型和链接，不存封面图。live-check [45772752652](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45772752652)：`ok`，25 条 |
 | `app_store_my` | `rss.marketingtools.apple.com/api/v2/my/apps/top-free/25/apps.json` | 同上。Claude 15:00 前后用浏览器访问曾返回 502/504，live-check 时已恢复：`ok`，25 条 |
-| YouTube 马来西亚热门（待接入） | YouTube Data API `videos.list?chart=mostPopular&regionCode=MY` | 官方 API，需要 Owner 提供 `YOUTUBE_API_KEY`。YouTube 取消「热门」页面后，这个榜单改为收录热门音乐、电影和游戏视频 |
+| YouTube 马来西亚热门（已实现、待启用） | YouTube Data API `videos.list?chart=mostPopular&regionCode=MY` | D-013。自 2025-07-21 起榜单条目来自热门音乐、电影和游戏榜。视频元数据只用于当次私聊发送，系统不存储。默认关闭，等待审核、Owner 设置密钥及真实预览。 [变更记录](https://developers.google.com/youtube/data/revision_history#july-10-2025) · [功能说明](youtube.md) |

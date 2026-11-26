@@ -333,6 +333,7 @@ def send_parts(
     load: LedgerLoad,
     save: LedgerSave,
     *,
+    retry_rate_limit: bool = True,
     now: Callable[[], float] = time.time,
     sleep: Callable[[float], None] = time.sleep,
 ) -> str:
@@ -402,7 +403,8 @@ def send_parts(
             if result.state == "SENT":
                 last_sent = timestamp
                 break
-            if result.state != "RATE_LIMITED" or inline_retry_used or delay > INLINE_RETRY_LIMIT:
+            if (result.state != "RATE_LIMITED" or not retry_rate_limit
+                    or inline_retry_used or delay > INLINE_RETRY_LIMIT):
                 return result.state
             inline_retry_used = True
             sleep(delay)

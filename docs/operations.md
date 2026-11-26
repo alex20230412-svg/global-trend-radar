@@ -35,6 +35,18 @@ Token 和 PAT 只填在 GitHub 页面里，**不要贴到任何对话**。
 
 如出现 `RATE_LIMITED`，按私有台账的 `retry_at` 等待。若为 `UNKNOWN` 或 `SENDING`，按下方操作核对。临时跑仍遵守 RM0 和来源条款。
 
+## YouTube 申请 key（审核合并后再做）
+
+请等 Claude 审核合并后发出设置通知，再按以下步骤操作。启用前请阅读并同意本功能的隐私说明和 YouTube 服务条款。 [YouTube 功能说明](youtube.md)
+
+1. 在 Google Cloud Console **新建**项目，例如 `trend-radar-youtube`。 [Google Cloud Console](https://console.cloud.google.com/)
+2. 进入 **API 和服务 → 库**，搜索 **YouTube Data API v3**，选择 **启用**。
+3. 进入 **凭据 → 创建凭据 → API 密钥**。编辑此密钥，在 **API 限制 → 限制密钥** 中只选 **YouTube Data API v3** 并保存。 [Google Cloud 密钥指南](https://docs.cloud.google.com/docs/authentication/api-keys)
+4. 不开启结算，也不启动免费试用。 [YouTube API 配额](https://developers.google.com/youtube/data/determine_quota_cost)
+5. 在 GitHub 项目的 **Settings → Environments → radar-live → Add environment secret** 新增 `YOUTUBE_API_KEY`。密钥只填写到 GitHub 设置页。 [Environments 设置](https://github.com/alex20230412-svg/global-trend-radar/settings/environments)
+
+填好后告诉 Claude，让其另开 PR 将 `config/youtube.yaml` 的 `enabled` 改为 `true`，通过审批后用 **Radar report → preview** 验证两条独立的私聊消息与公开状态日志。主早报送达后才发送 YouTube 消息。同一份早报的 YouTube 投递有台账后，`resume` 不会重发。 [Radar report 工作流](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/report.yml)
+
 ## 阶段 C 启用与验收
 
 依 D-011，`collect.yml` 的 `17 * * * *` 和 `report.yml` 的 `30 0 * * *`（08:30 MYT）已在代码中开启，但只在 `RADAR_STAGE=c-scheduled` 时运行。Owner 只需把 `RADAR_STAGE` 从 `b-manual` 改成 `c-scheduled`。`RADAR_SCHEDULE_FROM` 可以留空：第一次计划采集会把自己的计划时间写进私库 `health/schedule-start.json`，之后用来统计漏跑。`keepalive.yml` 每月 1 日和 15 日用 API 重新启用三个定时工作流，避免公开仓库 60 天无活动后被停用。08:30 MYT 是目标时间，超过 30 分钟日报会标注延迟。跨小时排队延迟时，采集写入实际小时，原计划槽与延迟写进私有审计。

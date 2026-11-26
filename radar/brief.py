@@ -21,7 +21,7 @@ from .sources import clean_url
 
 
 MYT = timezone(timedelta(hours=8), "MYT")
-PROMPT_VERSION = "brief-v5.1"
+PROMPT_VERSION = "brief-v5.2"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 # Flash follows the format and the no-invention rule better than Flash-Lite (first live run).
 GEMINI_MODELS = ("gemini-flash-latest", "gemini-flash-lite-latest")
@@ -47,7 +47,8 @@ SOURCE_NAMES = {
 SYSTEM_PROMPT = """你为马来西亚华人编辑中文热点早报。只返回 JSON 对象 items 和 ideas。
 items 的每行包含原样 id、label、why。label 是最多 8 个中文字的主题，why 是一句简体中文原因。
 优先保留马来西亚热搜，依照输入顺序。中国热议从候选选至多 8 条，维基从前 30 条选至多 5 条，排除色情或成人内容。
-歌手、歌曲、品牌及 App 名可以保留原文，App 的 why 用一句话说明用途。不要重复同一人物、事件或作品。
+热搜话题的 label 用中文概括事件。维基条目、歌曲、人名、剧名和 App 名保留原文，不要音译或硬译。
+App 的 label 写 2 到 5 个字的用途（例如 网购、电子钱包、直播带货），why 用一句话说明用途。不要重复同一人物、事件或作品。
 只能依据输入的标题和上下文，不得加入条目里没有的事实。禁止编造数字、年龄、日期、人名。不知道原因就写「原因不明」。
 不用写栏目、地区名单、搜索量、排名、链接或 Markdown，程序会补上。
 ideas 最多 3 条，每条写成一个可以尝试的生意或服务：卖什么、做什么、给谁，并说明依据。不能只复述新闻或天气。
@@ -129,6 +130,26 @@ HEADINGS = {
 ARCHIVE_SECTIONS = {"other": "global"}
 SHORT_LABELS = {"中新网": "中新"}
 HIDDEN_KEYS = {"link", "original_url", "also_searched_in", "countries", "volume", "views", "key"}
+
+
+WEATHER_ZH = (
+    ("THUNDERSTORM", "雷暴警告"), ("CONTINUOUS RAIN", "持续降雨警告"), ("STRONG WIND", "强风和大浪警告"),
+    ("TROPICAL", "热带气旋警告"), ("TSUNAMI", "海啸警告"), ("EARTHQUAKE", "地震消息"), ("HEAT", "热浪警告"),
+)
+WEATHER_LEVELS = (
+    ("SEVERE", "严重"), ("DANGER", "危险"), ("ALERT", "戒备"),
+    ("FIRST CATEGORY", "第一类"), ("SECOND CATEGORY", "第二类"), ("THIRD CATEGORY", "第三类"),
+)
+
+
+def _weather_zh(title):
+    """Chinese name for a MET Malaysia warning when the AI gave none; unknown titles stay as they are."""
+    upper = str(title).upper()
+    for word, name in WEATHER_ZH:
+        if word in upper:
+            level = next((zh for key, zh in WEATHER_LEVELS if key in upper), "")
+            return f"{name}（{level}）" if level else name
+    return title
 
 
 def _is_sport(entry):
@@ -404,7 +425,10 @@ def _format_brief(items, snapshot, now, previous_keys, token_notice, annotations
             labels_seen.add(trend_key(label or title))
             shown_title = label or title
             if section == "apps":
-                shown_title = why or row.get("genre") or row.get("developer") or "用途不明"
+                shown_title = label or why or row.get("genre") or row.get("developer") or "用途不明"
+            elif section == "music":
+                # Song names stay original in the table; the AI's note goes in the details.
+                shown_title = f"{title} — {row['artist']}" if row.get("artist") else title
             table.append(table_row(
                 number, _table_view(section, row), shown_title, metric_width=metric_width,
                 marker=previous_keys is not None and row["key"] not in previous_keys,
@@ -438,7 +462,7 @@ def _format_brief(items, snapshot, now, previous_keys, token_notice, annotations
         suffix = f"，到 {row['until']}" if row.get("until") else ""
         if row.get("publisher"):
             suffix += f"（{row['publisher']}）"
-        text = why or label or row["title"]
+        text = why or label or (_weather_zh(row["title"]) if row["id"].startswith("w") else row["title"])
         news.append(((text.rstrip("。.") if suffix else text) + suffix, row.get("link")))
     if not items["weather"]:
         weather_unavailable = any(source.get("kind") == "weather" and source.get("status") not in {"ok", "empty"}

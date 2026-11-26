@@ -213,6 +213,12 @@ class IsolationTests(unittest.TestCase):
         for name in ("collect.yml", "report.yml", "keepalive.yml"):
             self.assertIn(name, workflow)
 
+    def test_schedule_start_key_is_a_valid_private_store_key(self):
+        # MemoryStore accepts any key; the real store only allows its fixed roots.
+        store = storage.PrivateGitStore.__new__(storage.PrivateGitStore)
+        store.root = Path("/tmp/radar-key-check")
+        self.assertEqual(store.root / live.SCHEDULE_START_KEY, store._path(live.SCHEDULE_START_KEY))
+
     def test_first_scheduled_collection_records_the_schedule_start(self):
         store = MemoryStore()
         env = {"RADAR_STAGE": "c-scheduled", "GITHUB_EVENT_NAME": "schedule"}

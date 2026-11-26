@@ -37,7 +37,7 @@ Token 和 PAT 只填在 GitHub 页面里，**不要贴到任何对话**。
 
 ## 阶段 C 启用与验收
 
-依 D-011，`collect.yml` 的 `17 * * * *` 和 `report.yml` 的 `30 0 * * *`（08:30 MYT）已在代码中开启，但只在 `RADAR_STAGE=c-scheduled` 时运行。Owner 只需把 `RADAR_STAGE` 从 `b-manual` 改成 `c-scheduled`。`RADAR_SCHEDULE_FROM` 可以留空：第一次计划采集会把自己的计划时间写进私库 `schedule/start.json`，之后用来统计漏跑。`keepalive.yml` 每月 1 日和 15 日用 API 重新启用三个定时工作流，避免公开仓库 60 天无活动后被停用。08:30 MYT 是目标时间，超过 30 分钟日报会标注延迟。跨小时排队延迟时，采集写入实际小时，原计划槽与延迟写进私有审计。
+依 D-011，`collect.yml` 的 `17 * * * *` 和 `report.yml` 的 `30 0 * * *`（08:30 MYT）已在代码中开启，但只在 `RADAR_STAGE=c-scheduled` 时运行。Owner 只需把 `RADAR_STAGE` 从 `b-manual` 改成 `c-scheduled`。`RADAR_SCHEDULE_FROM` 可以留空：第一次计划采集会把自己的计划时间写进私库 `health/schedule-start.json`，之后用来统计漏跑。`keepalive.yml` 每月 1 日和 15 日用 API 重新启用三个定时工作流，避免公开仓库 60 天无活动后被停用。08:30 MYT 是目标时间，超过 30 分钟日报会标注延迟。跨小时排队延迟时，采集写入实际小时，原计划槽与延迟写进私有审计。
 
 Owner 收到的是中文早报（`radar/brief.py`）：有 `GEMINI_API_KEY` 时由 Gemini 整理，否则是白话中文原文标题版。想随时看一份新的，在 Radar report 选 `preview`。
 

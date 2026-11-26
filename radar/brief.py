@@ -22,7 +22,7 @@ from .sources import clean_url
 
 
 MYT = timezone(timedelta(hours=8), "MYT")
-PROMPT_VERSION = "brief-v5.2"
+PROMPT_VERSION = "brief-v5.3"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 # Flash follows the format and the no-invention rule better than Flash-Lite (first live run).
 GEMINI_MODELS = ("gemini-flash-latest", "gemini-flash-lite-latest")
@@ -48,8 +48,8 @@ SOURCE_NAMES = {
 SYSTEM_PROMPT = """你为马来西亚华人编辑中文热点早报。只返回 JSON 对象 items 和 ideas。
 items 的每行包含原样 id、label、why。label 是最多 8 个中文字的主题，why 是一句简体中文原因。
 优先保留马来西亚热搜，依照输入顺序。中国热议从候选选至多 8 条，维基从前 30 条选至多 5 条，排除色情或成人内容。
-热搜话题的 label 用中文概括事件。维基条目、歌曲、人名、剧名和 App 名保留原文，不要音译或硬译。
-App 的 label 写 2 到 5 个字的用途（例如 网购、电子钱包、直播带货），why 用一句话说明用途。不要重复同一人物、事件或作品。
+malaysia、other、china 的 label 必须是中文，概括发生了什么事；即使搜索词是英文、马来文或人名也要这样写，例如搜索词是人名时，写成「前部长撤回诉讼」「乐队吉他手逝世」这类事件描述，而不是照抄名字。可以用通行的中文译名，不要自创音译。
+wiki 的 label 可以保留条目原名。歌曲名由程序显示原文。App 的 label 写 2 到 5 个字的用途（例如 网购、电子钱包、直播带货），why 用一句话说明用途。不要重复同一人物、事件或作品。
 只能依据输入的标题和上下文，不得加入条目里没有的事实。禁止编造数字、年龄、日期、人名。不知道原因就写「原因不明」。
 不用写栏目、地区名单、搜索量、排名、链接或 Markdown，程序会补上。
 ideas 最多 3 条，每条写成一个可以尝试的生意或服务：卖什么、做什么、给谁，并说明依据。不能只复述新闻或天气。

@@ -207,6 +207,22 @@ class BriefTests(unittest.TestCase):
         for denied in ("六十五", "65", "超过八个字", "虚构项目"):
             self.assertNotIn(denied, plain)
 
+    def test_invented_number_in_reason_keeps_a_valid_label(self):
+        snapshot = {"malaysia": [{"title": "tommy thomas", "url": "https://example.org/a",
+                                  "context": {"title": "Synthetic suit withdrawn worth RM1.9mil"}}],
+                    "weather": [{"title": "THUNDERSTORMS WARNING", "url": "https://example.org/w",
+                                 "valid_to": "2026-11-27T06:00:00+00:00"}]}
+        writer = FakeWriter(json.dumps({"items": [
+            {"id": "m1", "label": "前总检察长诉讼", "why": "撤回190万令吉诉讼"},
+            {"id": "w1", "label": "雷暴", "why": "气象局发布雷暴预警。"},
+        ], "ideas": []}, ensure_ascii=False))
+        plain = _message_text(build_brief(snapshot, NOW, "smoke-2026-11-27", writer).parts[0])
+        self.assertIn("前总检察长诉讼", plain)
+        self.assertNotIn("190万", plain)
+        self.assertIn("Synthetic suit withdrawn", plain)
+        self.assertIn("气象局发布雷暴预警，到", plain)
+        self.assertNotIn("。，", plain)
+
     def test_cross_section_alias_urls_and_wiki_adult_filter(self):
         snapshot = {
             "malaysia": [{"title": "新电影", "url": "https://example.org/movie?utm_source=first"}],

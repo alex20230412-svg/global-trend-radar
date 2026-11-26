@@ -20,7 +20,7 @@ import yaml
 from defusedxml.ElementTree import fromstring
 from defusedxml.common import DefusedXmlException
 
-from .source_http import GDELT_HOST, SourceError, SourceHttp
+from .source_http import CONNECT_TIMEOUT, GDELT_HOST, SourceError, SourceHttp
 
 
 DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "config" / "sources.yaml"
@@ -509,7 +509,7 @@ def collect_source(source, http=None):
         if source.retention != "long_term":
             raise SourceError("retention_approval_required")
         with httpx.Client(
-            trust_env=False, timeout=httpx.Timeout(5.0, connect=4.0), follow_redirects=False,
+            trust_env=False, timeout=httpx.Timeout(5.0, connect=CONNECT_TIMEOUT), follow_redirects=False,
         ) as client:
             return collect_source(source, SourceHttp(client))
     if source.kind == "gdelt":

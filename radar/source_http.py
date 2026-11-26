@@ -20,6 +20,8 @@ MIN_INTERVAL = 0.5
 GDELT_HOST = "api.gdeltproject.org"
 ORIGIN_MIN_INTERVALS = {GDELT_HOST: 5.0}
 ORIGIN_READ_TIMEOUTS = {GDELT_HOST: 20.0}
+# Malaysian origins answered within 4 s most hours, but GitHub runners saw sporadic ConnectTimeouts.
+CONNECT_TIMEOUT = 8.0
 DETAIL = re.compile(r"[A-Z][A-Za-z0-9_]{0,39}(?::[0-9]{1,7}:[0-9]{1,7})?")
 HOSTS = frozenset({
     "trends.google.com",
@@ -181,7 +183,7 @@ class SourceHttp:
         address = self.addresses[target.host]
         url = target.copy_with(host=address)
         read_timeout = ORIGIN_READ_TIMEOUTS.get(target.host)
-        options = {"timeout": httpx.Timeout(read_timeout, connect=4.0)} if read_timeout else {}
+        options = {"timeout": httpx.Timeout(read_timeout, connect=CONNECT_TIMEOUT)} if read_timeout else {}
         deadline = self.clock() + max(12, (read_timeout or 0) + 5)
         try:
             with self.client.stream(

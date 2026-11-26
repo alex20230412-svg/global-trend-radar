@@ -14,7 +14,7 @@ from .pipeline import (
     GOOD, MYT, SOURCE_ERROR_CODES, collect_slot, instant, partition, prepare_report, utc_now,
 )
 from .sources import SourceError, SourceItems, collect_source, load_sources
-from .source_http import DETAIL, SourceHttp
+from .source_http import CONNECT_TIMEOUT, DETAIL, SourceHttp
 from .storage import CODE_REPO, StorageError, _run_git, _write_files, read_json, read_observations
 
 
@@ -133,7 +133,7 @@ def _body_head(body):
 def _probe_source(source):
     if source.retention != "long_term":
         return _ProbeResult(SourceItems(), reason="retention_approval_required")
-    with httpx.Client(trust_env=False, follow_redirects=False, timeout=httpx.Timeout(5.0, connect=4.0)) as client:
+    with httpx.Client(trust_env=False, follow_redirects=False, timeout=httpx.Timeout(5.0, connect=CONNECT_TIMEOUT)) as client:
         transport = _ProbeHttp(client)
         try:
             rows = collect_source(source, transport)

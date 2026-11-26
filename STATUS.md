@@ -1,6 +1,18 @@
 # STATUS
 
-最后更新 2026-11-27 MYT，Claude。
+最后更新 2026-11-27 00:15 MYT，Claude。
+
+## 🇨🇳 中国在流行 · 已上线（2026-11-27 00:15 MYT）
+
+- D-015：早报不再放中国栏，改为在早报后面静音另发一条「🇨🇳 中国在流行」（#47、#48）。内容：
+  - 中国热议（微博、百度）
+  - 电视剧 5、电影 3、小说 3（百度热门榜）
+  - 歌曲 5、App 5（Apple 中国区）
+- live-check [45855719227](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45855719227)：`baidu_teleplay` 10、`baidu_movie` 10、`baidu_novel` 30、`apple_music_cn` 25、`app_store_cn` 25，全部 ok。
+- 真实预览 `preview-0009-2026-11-27`：
+  - 第一次运行时，主早报已送达，之后的审计推送遇到一次 `git_operation_failed`（一次性错误），中国和 YouTube 两条没发出。
+  - 用 `resume` 补发成功：`china status=ok sent=SENT`，`youtube status=ok`。
+- 按预览修正（#48）：中国 App 只显示名称，宣传语改作用途；关闭中新网（`chinanews_rss`），因为它混进了外国新闻，不符合「要流行不要新闻」。
 
 ## 早报 v5 · 已上线 main，真实预览通过（2026-11-27 00:00 MYT）
 

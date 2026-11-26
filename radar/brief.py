@@ -10,6 +10,7 @@ from datetime import timedelta, timezone
 from html import escape
 import json
 import re
+import time
 import unicodedata
 
 import httpx
@@ -507,6 +508,9 @@ def build_brief(snapshot, now, report_id, writer=None, *, previous_keys=None, to
     return Brief(split_parts(blocks, label=report_id), meta, entries)
 
 
+TRANSIENT = {"http_429", "http_500", "http_502", "http_503", "http_504"}
+
+
 class UnavailableWriter:
     """Stands in for the model when no usable key is configured, so the archive says why."""
 
@@ -520,7 +524,8 @@ class UnavailableWriter:
 class GeminiWriter:
     """Minimal Gemini generateContent client. Errors are reported as fixed status codes only."""
 
-    def __init__(self, key, *, transport=None, models=GEMINI_MODELS, timeout=90.0):
+    def __init__(self, key, *, transport=None, models=GEMINI_MODELS, timeout=90.0,
+                 retry_delay=30.0, sleep=time.sleep):
         key = key.strip() if isinstance(key, str) else key
         if not isinstance(key, str) or not GEMINI_KEY.fullmatch(key):
             raise ValueError("invalid_gemini_key")
@@ -528,6 +533,8 @@ class GeminiWriter:
         self._transport = transport
         self._models = tuple(models)
         self._timeout = timeout
+        self._retry_delay = retry_delay
+        self._sleep = sleep
 
     def _client(self):
         return httpx.Client(transport=self._transport, timeout=httpx.Timeout(self._timeout, connect=10.0),
@@ -580,6 +587,14 @@ class GeminiWriter:
         return (text, "ok") if text.strip() else (None, "empty_output")
 
     def write(self, system, prompt):
+        """One more pass after a short wait when every model was busy (a live preview saw 503)."""
+        text, status, model = self._write_once(system, prompt)
+        if text is None and self._retry_delay and (status in TRANSIENT or status.startswith("network_")):
+            self._sleep(self._retry_delay)
+            text, status, model = self._write_once(system, prompt)
+        return text, status, model
+
+    def _write_once(self, system, prompt):
         """Try each model in turn; a timeout or error on one falls through to the next."""
         status, last, tried, missing = "no_model", None, [], False
         try:

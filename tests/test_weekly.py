@@ -219,6 +219,13 @@ class WeeklyRoutingTests(unittest.TestCase):
         self.assertEqual(1, self._report(now=SUNDAY + timedelta(days=1)))
         self.assertEqual([], self.calls)
 
+    def test_backup_crons_map_to_the_same_actions(self):
+        from radar import live
+        self.assertEqual("send", live.REPORT_CRONS["50 0 * * *"])
+        self.assertEqual("weekly", live.REPORT_CRONS["20 1 * * 0"])
+        with self.assertRaisesRegex(StorageError, "report_operation_invalid"):
+            self._report(action="weekly", env={"RADAR_REPORT_SCHEDULE": "50 0 * * *"})
+
     def test_workflow_exposes_only_weekly_preview_manually_and_keeps_stage_c_gate(self):
         root = Path(__file__).resolve().parents[1]
         workflow = yaml.load((root / ".github/workflows/report.yml").read_text(encoding="utf-8"),

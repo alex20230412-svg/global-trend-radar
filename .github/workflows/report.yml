@@ -26,6 +26,9 @@ on:
   schedule:
     - cron: '30 0 * * *'
     - cron: '0 1 * * 0'
+    # Backups in case GitHub drops a scheduled run; an already-delivered report is not resent.
+    - cron: '50 0 * * *'
+    - cron: '20 1 * * 0'
 
 permissions:
   contents: read

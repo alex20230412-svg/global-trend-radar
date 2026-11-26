@@ -188,7 +188,8 @@ class IsolationTests(unittest.TestCase):
                 if cron:
                     schedules = [{"cron": cron}]
                     if name == "report":
-                        schedules.append({"cron": "0 1 * * 0"})
+                        schedules += [{"cron": "0 1 * * 0"}, {"cron": "50 0 * * *"}, {"cron": "20 1 * * 0"}]
+                        self.assertEqual({entry["cron"] for entry in schedules}, set(live.REPORT_CRONS))
                     self.assertEqual(spec["on"]["schedule"], schedules)
                     self.assertIn("github.event_name == 'schedule' && vars.RADAR_STAGE == 'c-scheduled'", job["if"])
                     self.assertEqual(job["concurrency"], {"group": "radar-private-writer",

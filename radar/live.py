@@ -23,6 +23,9 @@ from .youtube import fetch_youtube, load_youtube_config, render_youtube
 
 REPORT_ID = re.compile(r"(?:(?:daily|smoke|preview-\d{4})-\d{4}-\d{2}-\d{2}|alert-\d{8}T\d{2})\Z")
 DELIVERED = {"SENT", "CONFIRMED"}
+# GitHub can drop scheduled runs (none started for four hours after stage C was switched on).
+# The backups are safe: a report ID that was already delivered is not sent again.
+REPORT_CRONS = {"30 0 * * *": "send", "50 0 * * *": "send", WEEKLY_CRON: "weekly", "20 1 * * 0": "weekly"}
 BINDING_ACTIONS = {"bind_chat", "confirm_bind"}
 PUBLIC_ERRORS = {
     "live_gate_closed", "workflow_identity_invalid", "public_code_repository_required",
@@ -256,8 +259,8 @@ def _report(store, sources, approved, env, execution, created, now, schedule_fro
     requested = env.get("RADAR_REPORT_ID", "")
     if event == "schedule":
         cron = env.get("RADAR_REPORT_SCHEDULE") or "30 0 * * *"
-        scheduled_action = "weekly" if cron == WEEKLY_CRON else "send"
-        if cron not in {"30 0 * * *", WEEKLY_CRON} or (action and action != scheduled_action):
+        scheduled_action = REPORT_CRONS.get(cron)
+        if scheduled_action is None or (action and action != scheduled_action):
             raise StorageError("report_operation_invalid")
         action = scheduled_action
     elif action == "weekly" or (action == "weekly-preview" and event != "workflow_dispatch"):

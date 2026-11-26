@@ -46,8 +46,11 @@ WIKI_NAMESPACES = {
 }
 WEIBO_ARCHIVE_URL = f"https://{GITHUB_ARCHIVE_HOST}{WEIBO_ARCHIVE_PATH}"
 CHINA_NEWS_URL = "https://www.chinanews.com.cn/rss/scroll-news.xml"
+# Public board JSON, no login, cookie or signature; top.baidu.com/robots.txt is 404 (checked 2026-11-26).
+BAIDU_HOT_URL = "https://top.baidu.com/api/board?platform=wise&tab=realtime"
+BAIDU_SEARCH = "https://m.baidu.com/s?"
 EXTRA_SOURCE_LABELS = {
-    "wikipedia_my": "维基百科", "weibo_archive": "微博", "chinanews_rss": "中新网",
+    "wikipedia_my": "维基百科", "weibo_archive": "微博", "chinanews_rss": "中新网", "baidu_hot": "百度",
 }
 # Measured 76 KB of gzip per hour on 2026-11-26; the brief uses one related headline and
 # the newest few dozen stories, so keep two related items and 30 entries per feed.
@@ -76,6 +79,7 @@ SITE_ENDPOINTS = {
     "wikipedia_my": ("wiki", WIKI_URL),
     "weibo_archive": ("china", WEIBO_ARCHIVE_URL),
     "chinanews_rss": ("china", CHINA_NEWS_URL),
+    "baidu_hot": ("china", BAIDU_HOT_URL),
 }
 CHART_LINK_HOSTS = {"music.apple.com", "apps.apple.com"}
 TRACKERS = {"fbclid", "gclid", "dclid", "msclkid", "igshid", "mc_cid", "mc_eid", "mkt_tok"}
@@ -647,6 +651,37 @@ def _weibo_archive(source, http, now):
     return rows
 
 
+def _baidu_hot(source, body):
+    payload = _object(_json(body))
+    if payload.get("success") is not True:
+        raise SourceError("json_schema")
+    entries = None
+    for card in _list(_object(payload.get("data")).get("cards")):
+        content = card.get("content") if isinstance(card, dict) else None
+        if isinstance(content, list) and content:
+            # The mobile board nests the ranked list one level deeper than the desktop board.
+            inner = content[0].get("content") if isinstance(content[0], dict) else None
+            entries = inner if isinstance(inner, list) else content
+            break
+    if entries is None:
+        raise SourceError("json_schema")
+
+    def parse_item(position, raw):
+        entry = _item_object(raw)
+        if entry.get("isTop") is True:
+            return None  # A pinned editorial slot, not a ranked search.
+        word = entry.get("word")
+        if not isinstance(word, str) or not word.strip() or len(word) > 100:
+            raise MalformedItem("malformed_item")
+        index = entry.get("index")
+        rank = index if type(index) is int and 0 < index <= 100 else position
+        # The link is built here; the board's own URL is not used.
+        return _observation(source, word, BAIDU_SEARCH + urlencode({"word": word.strip()}), rank)
+
+    rows = _item_rows(entries[:31], parse_item)
+    return SourceItems(sorted(rows, key=lambda row: row["rank"])[:30], skipped=rows.skipped)
+
+
 def _china_news_link(url):
     cleaned = clean_url(url)
     if cleaned and urlsplit(cleaned).hostname == "www.chinanews.com.cn":
@@ -672,6 +707,8 @@ def collect_source(source, http=None):
         rows = _wikipedia(source, http.load, datetime.now(UTC))
     elif source.id == "weibo_archive":
         rows = _weibo_archive(source, http, datetime.now(UTC))
+    elif source.id == "baidu_hot":
+        rows = _baidu_hot(source, http.load(source.url))
     else:
         body = http.load(source.url)
         if source.kind == "hn":

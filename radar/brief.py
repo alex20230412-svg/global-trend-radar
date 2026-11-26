@@ -21,7 +21,7 @@ from .sources import clean_url
 
 
 MYT = timezone(timedelta(hours=8), "MYT")
-PROMPT_VERSION = "brief-v5"
+PROMPT_VERSION = "brief-v5.1"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 # Flash follows the format and the no-invention rule better than Flash-Lite (first live run).
 GEMINI_MODELS = ("gemini-flash-latest", "gemini-flash-lite-latest")
@@ -50,7 +50,8 @@ items 的每行包含原样 id、label、why。label 是最多 8 个中文字的
 歌手、歌曲、品牌及 App 名可以保留原文，App 的 why 用一句话说明用途。不要重复同一人物、事件或作品。
 只能依据输入的标题和上下文，不得加入条目里没有的事实。禁止编造数字、年龄、日期、人名。不知道原因就写「原因不明」。
 不用写栏目、地区名单、搜索量、排名、链接或 Markdown，程序会补上。
-ideas 最多 3 条，每条包含 text 和支持该推测的已有 ids。用保守语气，推测须有材料支持。"""
+ideas 最多 3 条，每条写成一个可以尝试的生意或服务：卖什么、做什么、给谁，并说明依据。不能只复述新闻或天气。
+每条包含 text 和支持该推测的已有 ids。用保守语气，推测须有材料支持。"""
 
 RESPONSE_SCHEMA = {
     "type": "OBJECT",
@@ -325,10 +326,12 @@ def _model_json(text, items):
         if not isinstance(label, str) or not isinstance(why, str):
             continue
         label, why = _clean(sanitize(label)), _clean(sanitize(why), MAX_BRIEF_CHARS)
-        if not label or table_width(label) > 16 or numbers(f"{label} {why}") - numbers(_reference(by_id[key])):
-            annotations[key] = ("", "")  # Render the title and context from the source.
-        else:
-            annotations[key] = (label, _clean(why, 42))
+        reference = numbers(_reference(by_id[key]))
+        # Check the label and the reason separately: an invented number in one drops only that part,
+        # and the source title or headline is shown in its place.
+        label_ok = bool(label) and table_width(label) <= 16 and not numbers(label) - reference
+        why_ok = bool(why) and not numbers(why) - reference
+        annotations[key] = (label if label_ok else "", _clean(why, 42) if why_ok else "")
     if not any(annotations.get(row["id"], ("", ""))[0] for row in items["malaysia"]):
         raise ValueError("no_malaysia_items")
     return annotations, raw["ideas"]
@@ -435,7 +438,8 @@ def _format_brief(items, snapshot, now, previous_keys, token_notice, annotations
         suffix = f"，到 {row['until']}" if row.get("until") else ""
         if row.get("publisher"):
             suffix += f"（{row['publisher']}）"
-        news.append(((why or label or row["title"]) + suffix, row.get("link")))
+        text = why or label or row["title"]
+        news.append(((text.rstrip("。.") if suffix else text) + suffix, row.get("link")))
     if not items["weather"]:
         weather_unavailable = any(source.get("kind") == "weather" and source.get("status") not in {"ok", "empty"}
                                   for source in snapshot.get("coverage", []))

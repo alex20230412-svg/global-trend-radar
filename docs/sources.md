@@ -73,3 +73,11 @@ GDELT 在全部 5 次运行中都连不上（诊断为 `ConnectTimeout`，8 秒�
 2026-11-26 复核 `api.github.com/robots.txt` 返回 404。存档当天文件缺失时，用最近经响应头验证的更新时刻判断是否超过 48 小时。首次部署没有已验证时刻时，只报告当天数据缺失。 [GitHub API robots.txt](https://api.github.com/robots.txt)
 
 合并后获批运行 `Radar live check` 时，安排在定时采集尚未启用的窗口，避免临时测试存储和生产存储各自读取同一来源。记录三源状态、条目数与耗时。获批用真实存储采集后，再记录私库的每小时增量。此处的 HTTP 样本不能替代这两项验收。
+
+## 中国在流行（D-015，2026-11-27）
+
+| 来源 | 核查证据 | 用法 |
+| --- | --- | --- |
+| `baidu_teleplay`、`baidu_movie`、`baidu_novel` | 与 `baidu_hot` 同一个公开接口 `top.baidu.com/api/board?platform=wise&tab=…`，robots.txt 返回 404。Claude 2026-11-27 核查：teleplay 10 条、movie 10 条、novel 30 条，均为 `success: true`，字段有 `title`、`desc`、`hotScore.value`、`index`。`tab=game` 返回「no found page」。 | 存标题、描述、热搜指数和排名，链接由代码按标题生成。显示在另发的「🇨🇳 中国在流行」。 |
+| `apple_music_cn`、`app_store_cn` | Apple 官方 Marketing Tools 中国区榜单，与马来西亚榜同一个接口。Claude 2026-11-26 核查读得到；App 榜当时显示的更新时间是 2026-11-10，是否每天更新待 live-check 观察。 | 与马来西亚 Apple 榜相同的字段。 |
+

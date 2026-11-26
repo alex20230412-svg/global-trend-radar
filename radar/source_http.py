@@ -216,6 +216,8 @@ class SourceHttp:
                         f"http_{response.status_code}",
                         _retry_after(response.headers.get("Retry-After", "")),
                         http_status=response.status_code,
+                        detail=(redirect_detail(target, response.headers.get("Location", ""))
+                                if 300 <= response.status_code < 400 else None),
                     )
                 encoding = response.headers.get("Content-Encoding", "identity")
                 if encoding.lower() != "identity":
@@ -240,3 +242,19 @@ def _archive_request(target):
         and WEIBO_ARCHIVE_FILE.fullmatch(target.path) is not None
         and target.query == b"ref=master"
     )
+
+
+def redirect_detail(target, location):
+    """A fixed label for public logs: which request redirected and to what kind of host."""
+    kind = "Robots" if target.path == "/robots.txt" else "Data"
+    try:
+        host = httpx.URL(location).host if location else ""
+    except (httpx.InvalidURL, TypeError, ValueError):
+        return f"Redirect{kind}Invalid"
+    if not host or host == target.host:
+        where = "Same"
+    elif host == f"www.{target.host}":
+        where = "Www"
+    else:
+        where = "Other"
+    return f"Redirect{kind}{where}"

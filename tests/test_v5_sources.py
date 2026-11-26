@@ -305,3 +305,20 @@ class BaiduHotTests(TestCase):
     def test_only_the_board_host_is_allowed(self):
         self.assertIn("top.baidu.com", HOSTS)
         self.assertEqual(("china", sources.BAIDU_HOT_URL), sources.SITE_ENDPOINTS["baidu_hot"])
+
+
+class RedirectDetailTests(TestCase):
+    def test_labels_never_include_the_location(self):
+        from radar.source_http import DETAIL, redirect_detail
+        api = httpx.URL("https://wikimedia.org/api/rest_v1/metrics/x")
+        robots = httpx.URL("https://wikimedia.org/robots.txt")
+        cases = (
+            (api, "/other/path", "RedirectDataSame"),
+            (api, "https://www.wikimedia.org/secret-path", "RedirectDataWww"),
+            (robots, "https://example.org/private?token=1", "RedirectRobotsOther"),
+            (api, "", "RedirectDataSame"),
+        )
+        for target, location, expected in cases:
+            label = redirect_detail(target, location)
+            self.assertEqual(expected, label)
+            self.assertIsNotNone(DETAIL.fullmatch(label))

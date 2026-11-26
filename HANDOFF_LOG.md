@@ -4,6 +4,18 @@
 
 ---
 
+## 2026-11-26 · Claude · YouTube 启用并实测
+
+- Owner 20:12 MYT 告知 `YOUTUBE_API_KEY` 已填。PR #31 把 `enabled` 改为 `true`，CI 通过后合并。
+- 真实 `preview`（run 45817775056）：主早报 `SENT`，YouTube `status=ok items=18 sent=SENT`。
+- 私库核对：
+  - `deliveries/preview-2014-2026-11-26-youtube.json` 只有 hash 和状态；
+  - `runs/report-45817775056-1-youtube.json` 只有 `status`、`items`、`sent`；
+  - 全库搜索 `youtube.com/watch` 和页脚文字，没有任何结果。
+- 下一步：等 Owner 确认 YouTube 消息格式；仍等 Owner 把 `RADAR_STAGE` 改为 `c-scheduled`。
+
+---
+
 ## 2026-11-26 · Claude · 审核并合并 YouTube（PR #30）
 
 - 逐项对照 Issue #28 审核：

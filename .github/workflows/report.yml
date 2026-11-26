@@ -21,9 +21,9 @@ on:
       part_no:
         description: Part number for confirmation only
         type: string
-  # Stage C only. Activate this trigger through an Owner-approved PR.
-  # schedule:
-  #   - cron: '30 0 * * *'
+  # Stage C (Owner approved 2026-11-26, Issue #16). Runs only while RADAR_STAGE is c-scheduled.
+  schedule:
+    - cron: '30 0 * * *'
 
 permissions:
   contents: read

@@ -29,6 +29,10 @@ GEOS = {"MY", "SG", "ID", "TH", "PH", "VN", "US", "GB", "IN", "JP", "KR", "TW", 
 TREND_URL = "https://trends.google.com/trending/rss?geo="
 WEATHER_LINK = "https://www.met.gov.my/en/"
 GDELT_URL = f"https://{GDELT_HOST}/api/v2/doc/doc"
+# Measured 76 KB of gzip per hour on 2026-11-26; the brief uses one related headline and
+# the newest few dozen stories, so keep two related items and 30 entries per feed.
+RELATED_LIMIT = 2
+NEWS_LIMIT = 30
 GDELT_MAX_ARTICLES = 20
 GDELT_QUERIES = (
     '(Malaysia OR "Kuala Lumpur" OR Putrajaya)',
@@ -291,7 +295,7 @@ def _trend_item(source, rank, item):
                 "url": url,
                 "publisher": _title(_ht_text(child, "news_item_source"), 100),
             })
-            if len(related) == 3:
+            if len(related) == RELATED_LIMIT:
                 break
     query = urlencode({"geo": source.geo, "q": title}, quote_via=quote)
     return _observation(
@@ -333,7 +337,7 @@ def _news(source, body):
             row["publisher"] = _title(publisher["title"], 100)
         return row
 
-    return _item_rows(feed.entries[:100], parse_item)
+    return _item_rows(feed.entries[:NEWS_LIMIT], parse_item)
 
 
 def _bernama_title(title):

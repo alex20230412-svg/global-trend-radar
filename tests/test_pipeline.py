@@ -170,14 +170,14 @@ class IsolationTests(unittest.TestCase):
             with self.subTest(changed=changed), self.assertRaisesRegex(storage.StorageError, "live_gate_closed"):
                 live.authorize({**env, **changed}, "collect")
 
-    def test_workflow_queues_and_cron_stay_disabled(self):
+    def test_workflow_queues_and_schedules_are_gated_by_stage_c(self):
         root = Path(__file__).resolve().parents[1] / ".github/workflows"
         for name, cron in (("collect", "17 * * * *"), ("report", "30 0 * * *"),
                            ("offline", None)):
             with self.subTest(workflow=name):
                 workflow = (root / f"{name}.yml").read_text(encoding="utf-8")
                 spec = yaml.load(workflow, Loader=yaml.BaseLoader)
-                self.assertEqual(set(spec["on"]), {"workflow_dispatch"} if cron else
+                self.assertEqual(set(spec["on"]), {"workflow_dispatch", "schedule"} if cron else
                                  {"workflow_dispatch", "pull_request"})
                 job = next(iter(spec["jobs"].values()))
                 self.assertEqual(job["runs-on"], "ubuntu-24.04")
@@ -186,7 +186,8 @@ class IsolationTests(unittest.TestCase):
                 for step in job["steps"][:2]:
                     self.assertRegex(step["uses"], r"^actions/[-a-z]+@[0-9a-f]{40}$")
                 if cron:
-                    self.assertIn(f"#   - cron: '{cron}'", workflow)
+                    self.assertEqual(spec["on"]["schedule"], [{"cron": cron}])
+                    self.assertIn("github.event_name == 'schedule' && vars.RADAR_STAGE == 'c-scheduled'", job["if"])
                     self.assertEqual(job["concurrency"], {"group": "radar-private-writer",
                                                           "queue": "max", "cancel-in-progress": "false"})
                     self.assertIn("refs/heads/main", job["if"])
@@ -197,6 +198,40 @@ class IsolationTests(unittest.TestCase):
                     self.assertNotIn("radar.live", workflow)
                     self.assertNotIn("environment", job)
                     self.assertEqual(spec["permissions"], {"contents": "read"})
+
+    def test_keepalive_only_reenables_workflows_without_secrets(self):
+        path = Path(__file__).resolve().parents[1] / ".github/workflows/keepalive.yml"
+        workflow = path.read_text(encoding="utf-8")
+        spec = yaml.load(workflow, Loader=yaml.BaseLoader)
+        self.assertEqual({"schedule", "workflow_dispatch"}, set(spec["on"]))
+        self.assertEqual({"actions": "write"}, spec["permissions"])
+        job = spec["jobs"]["keepalive"]
+        self.assertIn("vars.RADAR_STAGE == 'c-scheduled'", job["if"])
+        self.assertNotIn("secrets.", workflow)
+        self.assertNotIn("checkout", workflow)
+        self.assertNotIn("environment", job)
+        for name in ("collect.yml", "report.yml", "keepalive.yml"):
+            self.assertIn(name, workflow)
+
+    def test_first_scheduled_collection_records_the_schedule_start(self):
+        store = MemoryStore()
+        env = {"RADAR_STAGE": "c-scheduled", "GITHUB_EVENT_NAME": "schedule"}
+        created = datetime(2026, 11, 26, 5, 24, tzinfo=timezone.utc)
+        self.assertIsNone(live._schedule_start(store, {**env, "GITHUB_EVENT_NAME": "workflow_dispatch"},
+                                               "collect", created))
+        self.assertIsNone(live._schedule_start(store, env, "report", created))
+        self.assertEqual({}, store.files)
+        start = live._schedule_start(store, env, "collect", created)
+        self.assertEqual(datetime(2026, 11, 26, 5, 17, tzinfo=timezone.utc), start)
+        later = created + timedelta(hours=3)
+        self.assertEqual(start, live._schedule_start(store, env, "collect", later))
+        self.assertEqual(start, live._schedule_start(store, {**env, "GITHUB_EVENT_NAME": "workflow_dispatch"},
+                                                     "report", later))
+        self.assertEqual(datetime(2026, 1, 1, 0, 17, tzinfo=timezone.utc), live._schedule_start(
+            store, {**env, "RADAR_SCHEDULE_FROM": "2026-01-01T00:17:00+00:00"}, "collect", later))
+        with self.assertRaisesRegex(storage.StorageError, "^schedule_start_invalid$"):
+            live._schedule_start(MemoryStore(), {**env, "RADAR_SCHEDULE_FROM": "2026-01-01T00:20:00+00:00"},
+                                 "collect", later)
 
     def test_unapproved_sources_fail_closed(self):
         sources = load_sources()

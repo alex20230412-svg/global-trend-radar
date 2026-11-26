@@ -37,7 +37,9 @@ Token 和 PAT 只填在 GitHub 页面里，**不要贴到任何对话**。
 
 ## 阶段 C 启用与验收
 
-阶段 B 通过后，Owner 批准一个独立 PR 打开 `collect.yml` 的 `17 * * * *` 和 `report.yml` 的 `30 0 * * *`。为 `RADAR_SCHEDULE_FROM` 填写第一个计划采集时间（UTC ISO 8601，分钟为 17），将 `RADAR_STAGE` 设为 `c-scheduled`。08:30 MYT 是目标时间，超过 30 分钟日报会标注延迟。GitHub 的工作流创建时间用于推断最近计划槽。跨小时排队延迟时，采集写入实际小时，原计划槽与延迟写进私有审计。原槽缺口保留，迟到运行不会替代实际小时自己的计划触发。
+依 D-011，`collect.yml` 的 `17 * * * *` 和 `report.yml` 的 `30 0 * * *`（08:30 MYT）已在代码中开启，但只在 `RADAR_STAGE=c-scheduled` 时运行。Owner 只需把 `RADAR_STAGE` 从 `b-manual` 改成 `c-scheduled`。`RADAR_SCHEDULE_FROM` 可以留空：第一次计划采集会把自己的计划时间写进私库 `schedule/start.json`，之后用来统计漏跑。`keepalive.yml` 每月 1 日和 15 日用 API 重新启用三个定时工作流，避免公开仓库 60 天无活动后被停用。08:30 MYT 是目标时间，超过 30 分钟日报会标注延迟。跨小时排队延迟时，采集写入实际小时，原计划槽与延迟写进私有审计。
+
+Owner 收到的是中文早报（`radar/brief.py`）：有 `GEMINI_API_KEY` 时由 Gemini 整理，否则是白话中文原文标题版。想随时看一份新的，在 Radar report 选 `preview`。
 
 首 24 小时核对至少 20 个有有效核心数据并持久化的计划槽，完整、部分、失败和漏跑各自列出。连续三天查收日报并记录实际延时。第七天复核来源稳定性、真实覆盖、重复投递、容量及费用。GitHub 公开仓库长期无活动可能停用定时任务。平台整体停摆时，同仓库的告警也无法运行。 [定时触发行为](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule) · [并发队列](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
 
@@ -47,5 +49,5 @@ Token 和 PAT 只填在 GitHub 页面里，**不要贴到任何对话**。
 - 使用私库流水和私聊里的 `报告 ID · 分段 x/y` 核对。确认已收到时，在报告工作流选 `confirm_received`，填报告 ID 与段号。只有在确认未送达时才选 `confirm_unsent`。仍不确定就保留状态。确认后用 `resume` 处理剩余段；已确认或收到 API 成功回执的段会跳过。工作流输入只需日期编号和段号。
 - PAT 到期或撤销时，`github_access_rejected` 等状态可见于公开 Actions，私库不可写期间无法安全记录并发出 Telegram 告警。暂停、续期并替换同名 Secret 后恢复。Bot Token 变化会阻止已部分投递报告在新身份下续发，新报告使用新凭证。
 - 公开日志显示安全结果码。发生异常后在私库 `runs/` 查异常类名、radar 模块与行号，以及适用时的来源 ID 和 HTTP 状态。存储本身不可写时，审计也无法提交。
-- 容量预警是 GitHub 仓库 size 元数据达到 256 MiB，512 MiB 时安全停止。GitHub 的统计可能滞后。源码和私库历史都应按规则审查。若来源许可变更，立即暂停并清除其批准项；普通 git 删除仍会保留历史，历史改写或迁移需要 Owner 单独授权。
+- 容量预警是 GitHub 仓库 size 元数据达到 700 MiB，900 MiB 时安全停止（GitHub 建议仓库远低于 1 GB）。实测约 76 KB/小时，D-011 起每源新闻 30 条、相关报道 2 条。GitHub 的统计可能滞后。源码和私库历史都应按规则审查。若来源许可变更，立即暂停并清除其批准项；普通 git 删除仍会保留历史，历史改写或迁移需要 Owner 单独授权。
 - 以私库中的 `manifests`、`runs`、`health` 和 `deliveries` 为验收记录。公开仓库没有自动健康提交。私库校验和不符时保留证据，核对原提交与来源后再处理，缺失小时不回填。

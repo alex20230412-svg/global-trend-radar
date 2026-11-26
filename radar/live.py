@@ -7,7 +7,7 @@ import sys
 from tempfile import TemporaryDirectory
 
 from .binding import bind_chat, bound_chat_id, confirm_bind
-from .brief import GeminiWriter
+from .brief import GeminiWriter, UnavailableWriter
 from .delivery import DeliveryError, TelegramClient, reconcile_delivery
 from .diagnostics import diagnostic
 from .pipeline import (
@@ -112,10 +112,12 @@ def _audit(store, execution, **fields):
 
 def _writer(env):
     key = env.get("GEMINI_API_KEY", "")
+    if not key.strip():
+        return UnavailableWriter("no_key")
     try:
-        return GeminiWriter(key) if key else None
+        return GeminiWriter(key)
     except ValueError:
-        return None
+        return UnavailableWriter("invalid_key_format")
 
 
 def _telegram(env, store):

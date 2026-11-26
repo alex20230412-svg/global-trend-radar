@@ -157,12 +157,28 @@ class GeminiWriterTests(unittest.TestCase):
         text, status, model = self.writer(broken).write("s", "p")
         self.assertEqual((None, "network_ConnectTimeout", None), (text, status, model))
 
-    def test_invalid_key_is_rejected_and_live_falls_back_to_plain(self):
+    def test_invalid_key_is_rejected_and_live_falls_back_to_plain_with_a_reason(self):
         with self.assertRaises(ValueError):
             GeminiWriter("not a key")
-        self.assertIsNone(live._writer({"GEMINI_API_KEY": "not a key"}))
-        self.assertIsNone(live._writer({}))
+        self.assertEqual("invalid_key_format", live._writer({"GEMINI_API_KEY": "not a key"}).reason)
+        self.assertEqual("no_key", live._writer({}).reason)
+        self.assertEqual("no_key", live._writer({"GEMINI_API_KEY": " \n"}).reason)
         self.assertIsInstance(live._writer({"GEMINI_API_KEY": KEY}), GeminiWriter)
+        # A pasted trailing newline or space is harmless.
+        self.assertIsInstance(live._writer({"GEMINI_API_KEY": f" {KEY}\n"}), GeminiWriter)
+        snapshot = synthetic_report().snapshot
+        brief = build_brief(snapshot, NOW, "daily-2026-11-27", live._writer({"GEMINI_API_KEY": "not a key"}))
+        self.assertEqual(("plain", "invalid_key_format"), (brief.meta["mode"], brief.meta["status"]))
+
+    def test_stripped_key_is_sent_without_whitespace(self):
+        seen = []
+
+        def handler(request):
+            seen.append(request.headers["x-goog-api-key"])
+            return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "好"}]}}]})
+
+        GeminiWriter(f"  {KEY}\n", transport=httpx.MockTransport(handler)).write("s", "p")
+        self.assertEqual([KEY], seen)
 
     def test_preview_report_ids_are_accepted_for_recovery(self):
         self.assertTrue(live.REPORT_ID.fullmatch("preview-0915-2026-11-26"))

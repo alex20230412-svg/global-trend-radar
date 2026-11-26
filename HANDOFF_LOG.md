@@ -4,6 +4,19 @@
 
 ---
 
+## 2026-11-26 · Claude · YouTube 任务单
+
+- 早报 brief-v4 已合并（#27）。最新预览 `preview-1527-2026-11-26` 全部中文：App 写明用途，热门话题附搜索量，26/26 来源正常。
+- YouTube：
+  - 核实 [YouTube API 开发者政策](https://developers.google.com/youtube/terms/developer-policies)：非授权数据最多保存 30 天（III.E.4.d），不能用 API 数据计算衍生指标（III.E.4.h），必须显示 YouTube 服务条款链接并标明来源（III.A.1、III.F.2.a）。
+  - 核实 [API 变更记录](https://developers.google.com/youtube/v3/revision_history)：2025-07-21 起 `mostPopular` 只来自音乐、电影、游戏榜。
+  - 写成 Codex 任务单 [Issue #28](https://github.com/alex20230412-svg/global-trend-radar/issues/28)：只发送、不存储，独立一条消息，最多发一次，默认关闭。
+- 下一步：
+  - Owner 让 Codex 按 #28 开发，Claude 审核 PR；
+  - 另外仍等 Owner 把 `RADAR_STAGE` 改为 `c-scheduled`。
+
+---
+
 ## 2026-11-26 · Claude · 中文早报与阶段 C
 
 - 新增 `radar/brief.py` 和 `preview` 动作（#17）。阶段 C 的 cron、开始时间自动记录、保活和容量限制（#18）。热修：开始时间写到了不允许的私库根目录（#19，影响约 3 分钟，没有写入任何数据）。

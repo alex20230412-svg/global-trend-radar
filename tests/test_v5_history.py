@@ -57,6 +57,17 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual({entry_key("A cited original")}, previous_brief_keys(store, today))
 
 
+class NoHistoryTests(unittest.TestCase):
+    def test_no_delivered_brief_means_no_comparison(self):
+        today = date(2026, 11, 28)
+        store = MemoryStore()
+        self.assertIsNone(previous_brief_keys(store, today))
+        store.record(today - timedelta(days=1), {"parts": ["valid"], "brief_entries": []}, prefix="preview-0800")
+        self.assertIsNone(previous_brief_keys(store, today))
+        store.record(today - timedelta(days=2), {"parts": ["valid"], "brief_entries": []})
+        self.assertEqual(set(), previous_brief_keys(store, today))
+
+
 class ExpiryTests(unittest.TestCase):
     now = datetime(2026, 11, 27, 0, tzinfo=timezone.utc)
     token = "synthetic-private-key-probe"
@@ -82,6 +93,8 @@ class ExpiryTests(unittest.TestCase):
         self.assertEqual(self.probe(200, "2026-12-11 00:00:00 UTC"), (
             "expiring", "⚠️ 私库钥匙 14 天后到期（2026-12-11），请到 GitHub 更新 DATA_REPO_TOKEN",
         ))
+        for header in ("2026-12-11 00:00:00 +0000", "2026-12-11 08:00:00 +08:00", "2026-12-11T00:00:00Z"):
+            self.assertEqual(self.probe(200, header)[0], "expiring", header)
         self.assertEqual(self.probe(200), ("missing_header", None))
         self.assertEqual(self.probe(200, "invalid"), ("invalid_header", None))
 

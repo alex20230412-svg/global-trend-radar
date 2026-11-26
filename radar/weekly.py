@@ -168,7 +168,7 @@ def build_weekly(store, day, report_id, *, writer=None, token_notice=None):
         links = []
         for rank, hits in enumerate(hits_list, 1):
             entry = hits[-1][2]
-            rows.append(table_row(rank, f"{len(hits)}d", entry["title"], metric_width=3))
+            rows.append(table_row(rank, f"{len(hits)}天", entry["title"], metric_width=3))
             links.append((f"{rank}. {entry['title']} · {len(hits)} 天", entry["url"]))
         tables.append((heading, table_header("天", "条目", metric_width=3), rows))
         details.extend(quote_blocks(f"{heading}（点开看）", links))

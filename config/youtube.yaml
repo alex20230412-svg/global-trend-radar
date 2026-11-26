@@ -1,5 +1,5 @@
-# Wait for review, an Owner-provided key, and a separate activation PR.
-enabled: false
+# Enabled 2026-11-26 after Claude review (PR #30) and the Owner set YOUTUBE_API_KEY.
+enabled: true
 region: MY
 max_results: 25
 per_category: 5

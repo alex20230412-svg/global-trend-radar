@@ -183,12 +183,19 @@ def _send_youtube_supplement(store, execution, report_id, main_status, telegram,
         })}, "Record YouTube delivery state")
 
     try:
-        if main_status not in DELIVERED:
+        # While disabled the supplement is a no-op: no ledger read and no audit write.
+        try:
+            config = load_youtube_config()
+        except ValueError:
+            config, code = None, "invalid_config"
+        if config is None:
+            pass
+        elif not config.enabled:
+            code = "disabled"
+        elif main_status not in DELIVERED:
             code = "main_not_sent"
         elif store.read(ledger_key) is not None:
             code = "already_attempted"
-        elif not (config := load_youtube_config()).enabled:
-            code = "disabled"
         else:
             result = fetch_youtube(config, raw_key)
             code, items = result.status, len(result.videos)

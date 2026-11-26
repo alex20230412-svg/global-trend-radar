@@ -80,6 +80,7 @@ class ReportHarness:
                                True, "long_term")]
         self.approved = {"trends_my"}
         self.enabled = True
+        self.config_error = None
         self.main_status = 200
         self.supplement_status = 200
         self.api_status = 200
@@ -97,6 +98,11 @@ class ReportHarness:
             self.store, self.sources, self.approved, NOW, "mock-collect", fetch=lambda source: [row],
             clock=lambda: NOW,
         )
+
+    def load_config(self):
+        if self.config_error is not None:
+            raise self.config_error
+        return youtube.YouTubeConfig(self.enabled)
 
     def call_model(self, request):
         self.events.append("gemini")
@@ -145,7 +151,7 @@ class ReportHarness:
 
             with (patch.object(live, "_telegram", return_value=telegram),
                   patch.object(live, "GeminiWriter", return_value=writer),
-                  patch.object(live, "load_youtube_config", return_value=youtube.YouTubeConfig(self.enabled)),
+                  patch.object(live, "load_youtube_config", side_effect=self.load_config),
                   patch.object(live, "fetch_youtube", side_effect=fetch),
                   redirect_stdout(output), redirect_stderr(errors)):
                 code = live._report(self.store, self.sources, self.approved, env, f"mock-report-{self.run_count}",
@@ -243,6 +249,26 @@ class YouTubeReportTests(unittest.TestCase):
         self.assertEqual([], harness.fetch_calls)
         self.assertNotIn(YOUTUBE_LEDGER, harness.store.files)
         self.assertEqual("UNKNOWN", json.loads(harness.store.read(MAIN_LEDGER))["parts"][0]["delivery_state"])
+
+    def test_disabled_is_a_no_op_even_when_the_main_report_fails(self):
+        harness = ReportHarness()
+        harness.enabled = False
+        harness.main_status = 503
+        code, stdout, stderr = harness.run_report()
+        self.assertEqual(1, code)
+        self.assert_status(stdout, "disabled")
+        self.assertEqual([], harness.fetch_calls)
+        self.assertEqual([], [name for name, _ in harness.store.writes if name.endswith("-youtube.json")])
+
+    def test_invalid_config_is_reported_without_fetching(self):
+        harness = ReportHarness()
+        harness.config_error = ValueError("invalid_youtube_config")
+        code, stdout, stderr = harness.run_report()
+        self.assertEqual(0, code)
+        self.assert_status(stdout, "invalid_config")
+        self.assertEqual([], harness.fetch_calls)
+        self.assertEqual(1, len(harness.messages))
+        self.assertNotIn(YOUTUBE_LEDGER, harness.store.files)
 
     def test_disabled_or_google_error_leaves_the_main_report_delivered(self):
         for enabled, status, reason, expected, requested in (

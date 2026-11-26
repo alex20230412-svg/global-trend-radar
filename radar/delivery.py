@@ -46,6 +46,13 @@ class _MessageParser(HTMLParser):
         self.text: list[str] = []
 
     def handle_starttag(self, tag, attrs):
+        if not self.tags and (
+            (tag == "pre" and not attrs) or (tag == "blockquote" and attrs == [("expandable", None)])
+        ):
+            self.tags.append(tag)
+            return
+        if "pre" in self.tags:
+            raise DeliveryError("invalid_message_markup")
         if tag == "b" and not attrs:
             self.tags.append(tag)
             return
@@ -238,18 +245,21 @@ class TelegramClient:
         code = f"telegram_{status}" if status in REJECTION_CODES else "telegram_preflight_failed"
         return _Result("REJECTED", code)
 
-    def send(self, markup: str) -> _Result:
+    def send(self, markup: str, *, silent: bool = False) -> _Result:
         _message_text(markup)
         verified = self.verify_private_chat()
         if verified.state != "READY":
             return verified
-        status, body = self._call("sendMessage", {
+        payload = {
             "chat_id": self._chat_id,
             "text": markup,
             "parse_mode": "HTML",
             "link_preview_options": {"is_disabled": True},
             "allow_paid_broadcast": False,
-        })
+        }
+        if silent:
+            payload["disable_notification"] = True
+        status, body = self._call("sendMessage", payload)
         limited = _retry_result(status, body)
         if limited:
             return limited
@@ -334,6 +344,7 @@ def send_parts(
     save: LedgerSave,
     *,
     retry_rate_limit: bool = True,
+    silent: bool = False,
     now: Callable[[], float] = time.time,
     sleep: Callable[[float], None] = time.sleep,
 ) -> str:
@@ -386,7 +397,7 @@ def send_parts(
                 _update_row(row, "SENDING", now())
                 row["attempts"] += 1
                 save(report_id, ledger)
-                result = telegram.send(markup)
+                result = telegram.send(markup, silent=True) if silent else telegram.send(markup)
 
             timestamp = now()
             delay = result.retry_after

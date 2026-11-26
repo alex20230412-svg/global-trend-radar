@@ -14,6 +14,7 @@ import httpx
 
 CODE_REPO = "alex20230412-svg/global-trend-radar"
 DATA_REPO = "alex20230412-svg/global-trend-radar-data"
+GITHUB_API_ROOT = "https://api.github.com"
 DATA_URL = f"https://github.com/{DATA_REPO}.git"
 DATA_BRANCH = "main"
 # GitHub recommends repositories stay well under 1 GB.
@@ -45,7 +46,7 @@ def github_object(path, token):
         with httpx.Client(timeout=12, follow_redirects=False, trust_env=False) as client:
             with client.stream(
                 "GET",
-                f"https://api.github.com/repos/{path}",
+                f"{GITHUB_API_ROOT}/repos/{path}",
                 headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
             ) as response:
                 if response.status_code != 200:

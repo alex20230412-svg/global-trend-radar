@@ -15,18 +15,19 @@ import unicodedata
 import httpx
 
 from .delivery import split_parts
+from .layout import entry_key, quote_blocks, table_block, table_header, table_row, table_width
 from .scoring import instant, trend_key
 from .sources import clean_url
 
 
 MYT = timezone(timedelta(hours=8), "MYT")
-PROMPT_VERSION = "brief-v4"
+PROMPT_VERSION = "brief-v5"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 # Flash follows the format and the no-invention rule better than Flash-Lite (first live run).
 GEMINI_MODELS = ("gemini-flash-latest", "gemini-flash-lite-latest")
 # Visible ASCII only (no spaces or line breaks that could reach a header); Google key formats vary.
 GEMINI_KEY = re.compile(r"[\x21-\x7e]{20,512}")
-MAX_BRIEF_CHARS = 3400
+MAX_BRIEF_CHARS = 18000
 COUNTRIES = {
     "MY": "马来西亚", "SG": "新加坡", "ID": "印尼", "TH": "泰国", "PH": "菲律宾", "VN": "越南",
     "US": "美国", "GB": "英国", "IN": "印度", "JP": "日本", "KR": "韩国", "TW": "台湾", "HK": "香港",
@@ -41,50 +42,41 @@ SOURCE_NAMES = {
     "fmt": "Free Malaysia Today", "bernama": "马新社", "hn": "Hacker News", "bluesky": "Bluesky",
     "mastodon_tags": "Mastodon 标签", "mastodon_links": "Mastodon 链接", "weather": "大马气象局",
     "gdelt": "GDELT", "apple_music_my": "Apple Music 榜", "app_store_my": "App Store 榜",
+    "wikipedia_my": "马来西亚维基百科", "weibo_archive": "微博存档", "chinanews_rss": "中新网",
 }
-SYSTEM_PROMPT = """你是一位为马来西亚华人读者写早报的中文编辑。读者看不懂英文和马来文，最想知道「现在最流行什么、大家最热门的话题是什么」。
+SYSTEM_PROMPT = """你为马来西亚华人编辑中文热点早报。只返回 JSON 对象 items 和 ideas。
+items 的每行包含原样 id、label、why。label 是最多 8 个中文字的主题，why 是一句简体中文原因。
+优先保留马来西亚热搜，依照输入顺序。中国热议从候选选至多 8 条，维基从前 30 条选至多 5 条，排除色情或成人内容。
+歌手、歌曲、品牌及 App 名可以保留原文，App 的 why 用一句话说明用途。不要重复同一人物、事件或作品。
+只能依据输入的标题和上下文，不得加入条目里没有的事实。禁止编造数字、年龄、日期、人名。不知道原因就写「原因不明」。
+不用写栏目、地区名单、搜索量、排名、链接或 Markdown，程序会补上。
+ideas 最多 3 条，每条包含 text 和支持该推测的已有 ids。用保守语气，推测须有材料支持。"""
 
-规则：
-1. 只根据用户提供的 JSON 条目写，不得加入条目里没有的事实、数字、人名或日期。「可能的生意线索」一节除外，但那里也只能从条目推想，并且语气要保守。
-2. 搜索词本身看不出意思时，用它的 headline 解释它为什么热；仍然看不出就写「原因不明」，不要猜。
-3. 英文、马来文一律翻成简体中文。每条开头的主题必须是中文词，例如 lrt 写成「轻快铁」、tariff 写成「美国关税」；人名、歌名、App 名、品牌、球队名可以保留原文或用常见中文译名。
-4. 不要写任何国家或地区名单、搜索量或排名数字，程序会自己补上。
-5. 只写 JSON 里有的条目，每个条目最多一行，开头保留条目编号，例如 [m1]；不要新增条目，不要写链接，不要用 Markdown（不要 ** 或 #）。
-6. 严格按下面的格式和顺序输出，某一节没有条目就整节省略（天气没有就写「今天没有天气警告」）。
-
-格式：
-📅 {date} 热点早报
-
-🔥 马来西亚现在最热门的话题
-[m1] 主题：一句话说明大家为什么在搜（不超过 40 字）
-（最多 8 条，按条目顺序）
-
-🌏 全球正在热议
-[o1] 主题：一句话说明（不超过 40 字）
-（最多 4 条）
-
-🎵 大家在听（马来西亚 Apple Music 热门歌曲）
-[s1] 歌名 - 歌手：一句很短的说明，例如曲风或是谁的新歌（不超过 20 字，看不出就只写歌名和歌手）
-（最多 5 条）
-
-📱 大家在下载（马来西亚 App Store 热门免费 App）
-[a1] App 名：一句话说明这个 App 是做什么用的（可按 App 名和开发商用常识判断，例如「网购」「电子钱包」，不超过 25 字）
-（最多 5 条）
-
-📰 马来西亚新闻
-[n1] 一句话新闻（最多 3 条）
-
-⚠️ 天气
-[w1] 警告内容，到什么时候（最多 3 条）
-
-💡 可能的生意线索（AI 推测，仅供参考）
-- 结合上面的热门话题、歌曲和 App 推想的一句话（最多 3 条）"""
+RESPONSE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "items": {"type": "ARRAY", "items": {
+            "type": "OBJECT",
+            "properties": {name: {"type": "STRING"} for name in ("id", "label", "why")},
+            "required": ["id", "label", "why"],
+        }},
+        "ideas": {"type": "ARRAY", "items": {
+            "type": "OBJECT",
+            "properties": {"text": {"type": "STRING"}, "ids": {
+                "type": "ARRAY", "items": {"type": "STRING"},
+            }},
+            "required": ["text", "ids"],
+        }},
+    },
+    "required": ["items", "ideas"],
+}
 
 
 @dataclass
 class Brief:
     parts: list[str]
     meta: dict = field(default_factory=dict)
+    entries: list[dict] = field(default_factory=list)
 
 
 def _clean(value, limit=200):
@@ -116,93 +108,139 @@ def _date(now):
 
 
 SPORTS = re.compile(r"\bvs?\.?\b|\bnba\b|\bnfl\b|\bepl\b|\bfc\b", re.IGNORECASE)
-LIMITS = {"malaysia": 8, "other": 4, "music": 5, "apps": 5, "news": 3, "weather": 3}
+ADULT = re.compile(r"色情|成人视频|成人影片|性愛影片|性爱影片|\bporn(?:ography)?\b|\bhentai\b", re.IGNORECASE)
+NUMBERS = re.compile(
+    r"[0-9]+(?:[.,][0-9]+)*|"
+    r"[〇零一二三四五六七八九十百千万两亿]+(?=\s*(?:岁|年|月|日|号|元|人|名|级|分钟|小时))"
+)
+LIMITS = {
+    "malaysia": 8, "other": 4, "china": 8, "wiki": 5, "music": 5, "apps": 5,
+    "news": 3, "weather": 3,
+}
+HEADINGS = {
+    "malaysia": "🔥 马来西亚热搜",
+    "other": "🌏 全球热议",
+    "china": "🇨🇳 中国热议",
+    "wiki": "🔍 大家在查（维基）",
+    "music": "🎵 大家在听",
+    "apps": "📱 大家在下载",
+}
+ARCHIVE_SECTIONS = {"other": "global"}
+SHORT_LABELS = {"中新网": "中新"}
+HIDDEN_KEYS = {"link", "original_url", "also_searched_in", "countries", "volume", "views", "key"}
 
 
 def _is_sport(entry):
     return entry.get("category") == "体育" or SPORTS.search(str(entry.get("title", ""))) is not None
 
 
-def _topics(entries, prefix, limit, region_key, exclude=None, seen=None, headlines=None):
-    """Merge sports into one row and drop repeats (same topic or same context headline) before the cap.
+def _fingerprints(row):
+    title = trend_key(row.get("term") or row.get("title") or "")
+    headline = trend_key(row.get("headline") or "")
+    return ({("title", name) for name in (title, headline) if name}
+            | {("url", url) for url in (row.get("original_url"), row.get("link")) if url})
 
-    The model was asked to do this in the prompt but did not reliably follow it, so the input
-    is shaped in code: the model only ever sees at most `limit` topics.
-    """
-    seen = set() if seen is None else seen
-    headlines = set() if headlines is None else headlines
+
+def _select_unique(rows, limit, seen):
+    selected = []
+    for row in rows:
+        keys = _fingerprints(row)
+        if not keys or seen & keys:
+            continue
+        selected.append(row)
+        seen.update(keys)
+        if len(selected) == limit:
+            break
+    return selected
+
+
+def _numbered(rows, prefix):
+    return [dict(row, id=f"{prefix}{number}") for number, row in enumerate(rows, 1)]
+
+
+def _topics(entries, region_key, exclude=None):
     rows, sports = [], []
     for entry in entries:
-        key = trend_key(entry["title"])
+        title = _clean(entry.get("title"), 100)
+        if not title:
+            continue
         headline, publisher, _url = _context(entry)
-        if key in seen or (headline and headline in headlines):
-            seen.add(key)
-            continue
-        seen.add(key)
-        if headline:
-            headlines.add(headline)
-        if _is_sport(entry):
-            sports.append(entry)
-            continue
-        rows.append({
-            "term": _clean(entry["title"], 80), "headline": headline, "publisher": publisher,
+        row = {
+            "term": title, "headline": headline, "publisher": publisher,
             region_key: _countries(entry.get("geos"), exclude=exclude), "link": _link(entry),
+            "original_url": clean_url(entry.get("url")),
             "volume": _clean(entry.get("volume_raw"), 12) if exclude == "MY" else "",
-        })
+            "key": entry_key(entry.get("title"), _link(entry)),
+        }
+        (sports if _is_sport(entry) else rows).append(row)
     if sports:
-        games = "；".join(_clean(entry["title"], 40) for entry in sports[:4])
-        regions = []
-        for entry in sports:
-            regions.extend(country for country in _countries(entry.get("geos"), exclude=exclude) if country not in regions)
-        sport = {"term": "体育赛事", "headline": games, "publisher": "", region_key: regions[:6],
-                 "link": _link(sports[0])}
+        regions = list(dict.fromkeys(country for row in sports for country in row[region_key]))
+        sport = {
+            "term": "体育赛事", "headline": "；".join(row["term"] for row in sports[:4]),
+            "publisher": "", region_key: regions[:6], "volume": "", "link": sports[0]["link"],
+            "key": entry_key("体育赛事"),
+        }
+        limit = LIMITS["malaysia"] if exclude == "MY" else LIMITS["other"]
         rows.insert(min(len(rows), limit - 1), sport)
-    rows = rows[:limit]
-    for number, row in enumerate(rows, 1):
-        row["id"] = f"{prefix}{number}"
     return rows
 
 
-def collect_items(snapshot):
-    """Pick the items the brief may mention, each with a stable id and an optional link."""
-    seen, headlines = set(), set()
-    items = {
-        "malaysia": _topics(snapshot.get("malaysia", []), "m", LIMITS["malaysia"], "also_searched_in",
-                            exclude="MY", seen=seen, headlines=headlines),
+def _candidate(entry):
+    title = _clean(entry.get("title"), 120)
+    url = clean_url(entry.get("url"))
+    headline, publisher, _ = _context(entry)
+    views = str(entry.get("views_ceil", ""))
+    return {
+        "title": title, "link": url, "headline": headline, "publisher": publisher,
+        "source_label": _clean(entry.get("source_label") or entry.get("source_id"), 12),
+        "views": int(views) if re.fullmatch(r"[0-9]{1,18}", views) else None,
+        "key": entry_key(entry.get("title"), url),
     }
-    rising = {trend_key(entry["title"]) for entry in snapshot.get("rising", [])}
+
+
+def collect_items(snapshot):
+    """Prepare ranked, de-duplicated input with code-owned identifiers."""
+    seen = set()
+    items = {
+        "malaysia": _numbered(_select_unique(
+            _topics(snapshot.get("malaysia", []), "also_searched_in", exclude="MY"),
+            LIMITS["malaysia"], seen,
+        ), "m"),
+    }
     other = [*snapshot.get("monitored_regions", []), *snapshot.get("rising", []), *snapshot.get("new", [])]
-    items["other"] = _topics(other, "o", LIMITS["other"], "countries", seen=seen, headlines=headlines)
-    for row in items["other"]:
-        row["rising"] = trend_key(row["term"]) in rising
+    items["other"] = _numbered(_select_unique(_topics(other, "countries"), LIMITS["other"], seen), "o")
+    for section, prefix in (("china", "c"), ("wiki", "k")):
+        candidates = (_candidate(row) for row in snapshot.get(section, []))
+        candidates = (row for row in candidates if row["title"] and row["link"]
+                      and not (section == "wiki" and ADULT.search(row["title"])))
+        items[section] = _numbered(_select_unique(candidates, 30, set(seen)), prefix)
     charts = snapshot.get("charts", {})
     for section, source_id, prefix in (("music", "apple_music_my", "s"), ("apps", "app_store_my", "a")):
-        maker = "artist" if section == "music" else "developer"  # Apple's artistName is the developer for apps
-        items[section] = [{
-            "id": f"{prefix}{number}", "title": _clean(entry["title"], 80), maker: _clean(entry.get("artist"), 60),
+        maker = "artist" if section == "music" else "developer"
+        entries = ({
+            "title": _clean(entry.get("title"), 100), maker: _clean(entry.get("artist"), 60),
             "genre": _clean(entry.get("genre"), 30), "link": clean_url(entry.get("url")),
-        } for number, entry in enumerate(charts.get(source_id, [])[:LIMITS[section]], 1)]
-    items["news"] = []
-    for entry in snapshot.get("local_news", [])[:LIMITS["news"]]:
-        items["news"].append({
-            "id": f"n{len(items['news']) + 1}", "title": _clean(entry["title"], 160),
-            "publisher": PUBLISHERS.get(entry.get("source_id"), _clean(entry.get("publisher"), 40)),
-            "link": clean_url(entry.get("url")),
-        })
+            "key": entry_key(entry.get("title"), entry.get("url"), section=section, artist=entry.get("artist")),
+        } for entry in charts.get(source_id, []))
+        items[section] = _numbered(_select_unique(
+            (row for row in entries if row["title"]), LIMITS[section], seen,
+        ), prefix)
+    news = ({
+        "title": _clean(entry.get("title"), 160),
+        "publisher": PUBLISHERS.get(entry.get("source_id"), _clean(entry.get("publisher"), 40)),
+        "link": clean_url(entry.get("url")),
+    } for entry in snapshot.get("local_news", []))
+    items["news"] = _numbered(_select_unique((row for row in news if row["title"]), LIMITS["news"], seen), "n")
     latest = {}
     for entry in snapshot.get("weather", []):
-        title = _clean(entry["title"], 120)
+        title = _clean(entry.get("title"), 120)
         until = instant(entry.get("valid_to"))
-        if title not in latest or (until and (latest[title] is None or until > latest[title])):
-            latest[title] = until
-    items["weather"] = [{
-        "id": f"w{number}", "title": title,
-        "until": until.astimezone(MYT).strftime("%m-%d %H:%M") if until else None, "link": None,
-    } for number, (title, until) in enumerate(list(latest.items())[:LIMITS["weather"]], 1)]
+        if title and (title not in latest or (until and (latest[title][0] is None or until > latest[title][0]))):
+            latest[title] = (until, clean_url(entry.get("url")))
+    items["weather"] = _numbered([{
+        "title": title, "until": until.astimezone(MYT).strftime("%m-%d %H:%M") if until else None, "link": url,
+    } for title, (until, url) in list(latest.items())[:LIMITS["weather"]]], "w")
     return items
-
-
-HIDDEN_KEYS = {"link", "also_searched_in", "countries", "volume"}  # regions are added by code, never by the model
 
 
 def _prompt_payload(items, now):
@@ -224,49 +262,32 @@ def _footer(snapshot):
     coverage = snapshot.get("coverage", [])
     active = [source for source in coverage if source.get("status") not in {"disabled", "unapproved"}]
     good = [source for source in active if source.get("status") in {"ok", "empty"}]
-    problems = [_source_name(source) for source in active if source.get("status") not in {"ok", "empty"}]
+    problems = []
+    for source in active:
+        if source.get("status") in {"ok", "empty"}:
+            continue
+        if "weibo" in source.get("source_id", "") and (
+            source.get("status") == "stale" or source.get("reason") in {"stale", "archive_stale"}
+        ):
+            problems.append("微博存档已停更")
+        else:
+            problems.append(_source_name(source))
     line = f"ℹ️ 数据来源 {len(good)}/{len(active)} 个正常"
     if problems:
         line += "；暂时没有数据：" + "、".join(problems[:6]) + ("等" if len(problems) > 6 else "")
+    for source in good:
+        day = source.get("data_day")
+        if (source.get("source_id") == "wikipedia_my" and source.get("fallback")
+                and isinstance(day, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", day)):
+            line += f"\n维基百科采用 {day} 的马来西亚浏览榜"
+            break
     return line
 
 
-def _block(lines, links=None):
-    """Lines become one Telegram block; [id] markers turn into a trailing 🔗 link."""
-    html, plain = [], []
-    for index, line in enumerate(lines):
-        match = re.search(r"\[([mnowsa][0-9]{1,2})\]", line)
-        url = (links or {}).get(match.group(1)) if match else None
-        text = re.sub(r"\s*\[[mnowsa][0-9]{1,2}\]\s*", " ", line).strip()
-        bold = index == 0
-        safe = escape(text, quote=False)
-        if bold:
-            safe = f"<b>{safe}</b>"
-        if url:
-            safe += f' <a href="{escape(url, quote=True)}">🔗</a>'
-            text += " 🔗"
-        html.append(safe)
-        plain.append(text)
-    return "\n".join(html), "\n".join(plain)
-
-
-def _sections(text):
-    sections, current = [], []
-    for line in text.splitlines():
-        if line.strip():
-            current.append(line.rstrip())
-        elif current:
-            sections.append(current)
-            current = []
-    if current:
-        sections.append(current)
-    return sections
-
-
 def sanitize(text):
-    """Keep the model's plain text; drop links, Markdown and control characters."""
+    """Keep model text without model-supplied links, Markdown or controls."""
     text = re.sub(r"https?://\S+", "", str(text or ""))
-    text = text.replace("**", "").replace("__", "").replace("`", "")
+    text = text.replace("**", "").replace("__", "").replace(chr(96), "")
     lines = []
     for line in text.splitlines():
         line = re.sub(r"^\s*#+\s*", "", line)
@@ -276,120 +297,186 @@ def sanitize(text):
     return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
 
 
-def valid_brief(text):
-    lines = [line for line in text.splitlines() if line.strip()]
-    return 80 <= len(text) <= MAX_BRIEF_CHARS and len(lines) >= 4 and "马来西亚" in text
+def numbers(text):
+    return set(NUMBERS.findall(unicodedata.normalize("NFKC", text)))
 
 
-def _links(items):
-    return {row["id"]: row["link"] for rows in items.values() for row in rows if row.get("link")}
+def _reference(row):
+    return " ".join(str(row.get(name) or "") for name in (
+        "term", "title", "headline", "publisher", "artist", "developer", "genre",
+    ))
 
 
-SECTION_KINDS = (("📅", "title"), ("🔥", "items"), ("🌏", "items"), ("🎵", "items"), ("📱", "items"),
-                 ("📰", "items"), ("⚠", "items"), ("💡", "ideas"))
-MODEL_REGIONS = re.compile(r"\s*[（(][^（）()]*(?:也在|搜)[^（）()]*[）)]")
-
-
-def shape_ai(text, items):
-    """Keep only known sections and real item lines; regions come from the data, not the model."""
-    rows = {row["id"]: row for section in items.values() for row in section}
-    shaped = []
-    for section in _sections(text):
-        head = section[0].strip()
-        kind = next((kind for prefix, kind in SECTION_KINDS if head.startswith(prefix)), None)
-        if kind is None:
+def _model_json(text, items):
+    if not isinstance(text, str) or len(text) > MAX_BRIEF_CHARS:
+        raise ValueError("invalid_output")
+    raw = json.loads(text)
+    if (not isinstance(raw, dict) or not isinstance(raw.get("items"), list)
+            or not isinstance(raw.get("ideas"), list)):
+        raise ValueError("invalid_output")
+    by_id = {row["id"]: row for rows in items.values() for row in rows}
+    annotations = {}
+    for proposed in raw["items"]:
+        if not isinstance(proposed, dict):
             continue
-        if kind == "title":
-            shaped.append([head])
+        key, label, why = (proposed.get(name) for name in ("id", "label", "why"))
+        if not isinstance(key, str) or key not in by_id or key in annotations:
             continue
-        lines = [head]
-        if kind == "ideas":
-            lines += [line for line in section[1:] if line.lstrip().startswith(("-", "•"))][:3]
+        if not isinstance(label, str) or not isinstance(why, str):
+            continue
+        label, why = _clean(sanitize(label)), _clean(sanitize(why), MAX_BRIEF_CHARS)
+        if not label or table_width(label) > 16 or numbers(f"{label} {why}") - numbers(_reference(by_id[key])):
+            annotations[key] = ("", "")  # Render the title and context from the source.
         else:
-            used = set()
-            for line in section[1:]:
-                match = re.search(r"\[([mnowsa][0-9]{1,2})\]", line)
-                if not match or match.group(1) not in rows or match.group(1) in used:
-                    continue
-                used.add(match.group(1))
-                row = rows[match.group(1)]
-                line = MODEL_REGIONS.sub("", line).rstrip()
-                if row.get("volume"):
-                    line += f" · 搜索 {row['volume']}"
-                if row.get("also_searched_in"):
-                    line += f"（{'、'.join(row['also_searched_in'])}也在搜）"
-                elif row.get("countries"):
-                    line += f"（{'、'.join(row['countries'])}）"
-                lines.append(line)
-            if len(lines) == 1 and head.startswith("⚠") and not items["weather"]:
-                lines.append("今天没有天气警告")
-        if len(lines) > 1:
-            shaped.append(lines)
-    return shaped
-
-
-def ai_blocks(text, items, snapshot):
-    sections = shape_ai(text, items)
-    if not any(section[0].startswith("🔥") and len(section) > 1 for section in sections):
+            annotations[key] = (label, _clean(why, 42))
+    if not any(annotations.get(row["id"], ("", ""))[0] for row in items["malaysia"]):
         raise ValueError("no_malaysia_items")
-    blocks = [_block(section, _links(items)) for section in sections]
-    footer = _footer(snapshot) + " · 以上由 AI 根据当天标题整理，可能有误，点 🔗 看原文"
-    blocks.append((escape(footer, quote=False), footer))
-    return blocks
+    return annotations, raw["ideas"]
 
 
-def plain_blocks(items, snapshot, now):
-    blocks = [_block([f"📅 {_date(now)} 热点早报", "（AI 摘要今天不可用，以下是原文，点 🔗 看原文）"])]
-    links = _links(items)
-
-    def section(heading, lines):
-        if lines:
-            blocks.append(_block([heading, *lines], links))
-
+def _ideas(proposals, rows):
+    usable = {row["id"]: row for row in rows}
     lines = []
-    for row in items["malaysia"]:
-        volume = f" · 搜索 {row['volume']}" if row.get("volume") else ""
-        also = f"（{'、'.join(row['also_searched_in'])}也在搜）" if row["also_searched_in"] else ""
-        why = f" —— {row['headline']}" if row["headline"] else ""
-        lines.append(f"[{row['id']}] {row['term']}{volume}{also}{why}")
-    section("🔥 马来西亚现在最热门的话题", lines)
-    section("🌏 全球正在热议", [
-        f"[{row['id']}] {row['term']}（{'、'.join(row['countries'])}）" + (f" —— {row['headline']}" if row["headline"] else "")
-        for row in items["other"]
-    ])
-    section("🎵 大家在听（马来西亚 Apple Music 热门歌曲）",
-            [f"[{row['id']}] {row['title']}" + (f" - {row['artist']}" if row["artist"] else "") for row in items["music"]])
-    section("📱 大家在下载（马来西亚 App Store 热门免费 App）",
-            [f"[{row['id']}] {row['title']}" + (f"（{row['genre'] or row['developer']}）" if row["genre"] or row["developer"] else "")
-             for row in items["apps"]])
-    section("📰 马来西亚新闻", [f"[{row['id']}] {row['title']}（{row['publisher']}）" for row in items["news"]])
-    weather = [f"[{row['id']}] {row['title']}" + (f"，到 {row['until']}" if row["until"] else "")
-               for row in items["weather"]]
-    blocks.append(_block(["⚠️ 天气", *(weather or ["今天没有天气警告"])], links))
+    for proposal in proposals:
+        if not isinstance(proposal, dict):
+            continue
+        text, ids = proposal.get("text"), proposal.get("ids")
+        if (not isinstance(text, str) or not isinstance(ids, list) or not ids
+                or any(not isinstance(key, str) or key not in usable for key in ids)):
+            continue
+        text = _clean(sanitize(text), 80)
+        references = " ".join(_reference(usable[key]) for key in ids)
+        if text and text not in lines and numbers(text) <= numbers(references):
+            lines.append(text)
+        if len(lines) == 3:
+            break
+    return lines
+
+
+def _section_rows(items, annotations):
+    seen = set()
+    for section in HEADINGS:
+        rows = items[section]
+        if annotations is not None and section in {"china", "wiki"}:
+            rows = [row for row in rows if row["id"] in annotations]
+        yield section, _select_unique(rows, LIMITS[section], seen)
+
+
+def _heading(now):
+    local = instant(now).astimezone(MYT)
+    weekday = "一二三四五六日"[local.weekday()]
+    return f"📅 {_date(now)}（周{weekday}）热点早报"
+
+
+def _table_view(section, row):
+    if section == "malaysia":
+        volume = row.get("volume", "")
+        return volume if re.fullmatch(r"[0-9,.]+[KkMmBb]?\+?", volume) else "-"
+    if section == "wiki":
+        views = row["views"]
+        return "-" if views is None else f"{views // 1000}K" if views >= 1000 else str(views)
+    return None
+
+
+def _format_brief(items, snapshot, now, previous_keys, token_notice, annotations=None, ideas=()):
+    heading = _heading(now)
+    opening = heading if annotations is not None else heading + "\n（AI 摘要今天不可用，点开看原文）"
+    blocks = [(f"<b>{escape(heading)}</b>" + escape(opening[len(heading):]), opening)]
+    tables, details, history, shown = [], [], [], []
+    labels_seen = set()
+    for section, rows in _section_rows(items, annotations):
+        if not rows:
+            continue
+        metric_width = (max(6, *(table_width(_table_view(section, row)) for row in rows))
+                        if section == "malaysia" else 7)
+        section_header = (table_header("搜索量", metric_width=metric_width) if section == "malaysia" else
+                          table_header("浏览", "条目") if section == "wiki" else
+                          table_header(title="用途", app=True) if section == "apps" else table_header())
+        table = []
+        for number, row in enumerate(rows, 1):
+            title = row.get("term") or row["title"]
+            label, why = (annotations or {}).get(row["id"], ("", ""))
+            if label and trend_key(label) in labels_seen:
+                label = ""
+            labels_seen.add(trend_key(label or title))
+            shown_title = label or title
+            if section == "apps":
+                shown_title = why or row.get("genre") or row.get("developer") or "用途不明"
+            table.append(table_row(
+                number, _table_view(section, row), shown_title, metric_width=metric_width,
+                marker=previous_keys is not None and row["key"] not in previous_keys,
+                app_name=title if section == "apps" else None,
+                suffix=f"（{SHORT_LABELS.get(row['source_label'], row['source_label'])}）" if section == "china" else "",
+            ))
+            explanation = why or row.get("headline") or row.get("artist") or row.get("genre") or ""
+            regions = row.get("also_searched_in") or row.get("countries") or ()
+            details.append((
+                f"{HEADINGS[section].split()[0]} {number}. {title if section in {'music', 'apps'} else label or title}"
+                + (f" · {explanation}" if explanation else "")
+                + (f"（{'、'.join(regions)}{'也在搜' if section == 'malaysia' else ''}）" if regions else ""),
+                row["link"],
+            ))
+            history.append({
+                "key": row["key"], "section": ARCHIVE_SECTIONS.get(section, section),
+                "title": title, "url": row["link"], "metric": row.get("views") if section == "wiki" else row.get("volume"),
+                "source": row.get("source_label"), "artist": row.get("artist"),
+            })
+        tables.append((HEADINGS[section], section_header, table))
+        shown.extend(rows)
+    if tables:
+        blocks.append(table_block(tables))
+    blocks.extend(quote_blocks("为什么热（点开看）", details))
+
+    news = []
+    used = {key for row in shown for key in _fingerprints(row)}
+    final_news = _select_unique(items["news"], LIMITS["news"], used)
+    for row in final_news + items["weather"]:
+        label, why = (annotations or {}).get(row["id"], ("", ""))
+        suffix = f"，到 {row['until']}" if row.get("until") else ""
+        if row.get("publisher"):
+            suffix += f"（{row['publisher']}）"
+        news.append(((why or label or row["title"]) + suffix, row.get("link")))
+    if not items["weather"]:
+        weather_unavailable = any(source.get("kind") == "weather" and source.get("status") not in {"ok", "empty"}
+                                  for source in snapshot.get("coverage", []))
+        news.append(("天气数据暂不可用" if weather_unavailable else "今天没有天气警告", None))
+    blocks.extend(quote_blocks("新闻和天气（点开看）", news))
+    shown.extend(final_news + items["weather"])
+    tips = _ideas(ideas, shown)
+    if tips:
+        name = "💡 可能的生意线索（AI 推测，仅供参考）"
+        body = "\n".join(f"• {tip}" for tip in tips)
+        blocks.append((f"<b>{escape(name)}</b>\n{escape(body)}", f"{name}\n{body}"))
+
     footer = _footer(snapshot)
+    if annotations is not None:
+        footer += "\n以上由 AI 根据当天标题整理，可能有误，点 🔗 看原文"
+    if token_notice:
+        footer += f"\n{token_notice}"
     blocks.append((escape(footer, quote=False), footer))
-    return blocks
+    return blocks, history
 
 
-def build_brief(snapshot, now, report_id, writer=None):
-    """Return the Telegram parts and what produced them; never raises on model failure."""
+def build_brief(snapshot, now, report_id, writer=None, *, previous_keys=None, token_notice=None):
+    """Build a Telegram brief from source rows and optional validated annotations."""
     items = collect_items(snapshot)
     meta = {"prompt_version": PROMPT_VERSION, "mode": "plain", "status": "no_writer", "model": None}
     if writer is not None:
-        text, status, model = writer.write(SYSTEM_PROMPT, _prompt_payload(items, now))
-        meta.update(status=status, model=model)
-        if text is not None:
-            text = sanitize(text)
-            if valid_brief(text):
-                try:
-                    parts = split_parts(ai_blocks(text, items, snapshot), label=report_id)
-                    meta.update(mode="ai", status="ok", text=text)
-                    return Brief(parts, meta)
-                except Exception as error:  # noqa: BLE001 - any rendering problem falls back to plain text.
-                    meta["status"] = f"render_{type(error).__name__}"[:48]
-            else:
-                meta["status"] = "invalid_output"
-    return Brief(split_parts(plain_blocks(items, snapshot, now), label=report_id), meta)
+        try:
+            text, status, model = writer.write(SYSTEM_PROMPT, _prompt_payload(items, now))
+            meta.update(status=status, model=model)
+            if text is not None:
+                annotations, ideas = _model_json(text, items)
+                blocks, entries = _format_brief(
+                    items, snapshot, now, previous_keys, token_notice, annotations, ideas,
+                )
+                parts = split_parts(blocks, label=report_id)
+                meta.update(mode="ai", status="ok")
+                return Brief(parts, meta, entries)
+        except Exception:
+            meta["status"] = "invalid_output"
+    blocks, entries = _format_brief(items, snapshot, now, previous_keys, token_notice)
+    return Brief(split_parts(blocks, label=report_id), meta, entries)
 
 
 class UnavailableWriter:
@@ -448,7 +535,10 @@ class GeminiWriter:
         body = {
             "systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 8192},
+            "generationConfig": {
+                "temperature": 0.2, "maxOutputTokens": 8192,
+                "responseMimeType": "application/json", "responseSchema": RESPONSE_SCHEMA,
+            },
         }
         response = client.post(f"{GEMINI_BASE}/models/{model}:generateContent", json=body, headers=self._headers())
         if response.status_code != 200:

@@ -2,6 +2,7 @@
 
 import re
 import ipaddress
+import os
 import socket
 import time
 from dataclasses import dataclass, field
@@ -22,6 +23,11 @@ ORIGIN_MIN_INTERVALS = {GDELT_HOST: 5.0}
 ORIGIN_READ_TIMEOUTS = {GDELT_HOST: 20.0}
 # Malaysian origins answered within 4 s most hours, but GitHub runners saw sporadic ConnectTimeouts.
 CONNECT_TIMEOUT = 8.0
+GITHUB_ARCHIVE_HOST = "api.github.com"
+WEIBO_ARCHIVE_PATH = "/repos/justjavac/weibo-trending-hot-search/contents/raw"
+WEIBO_ARCHIVE_FILE = re.compile(re.escape(WEIBO_ARCHIVE_PATH) + r"/[0-9]{4}-[0-9]{2}-[0-9]{2}\.json")
+SINGLE_READ_ORIGINS = {GITHUB_ARCHIVE_HOST, "wikimedia.org", "www.chinanews.com.cn"}
+ARCHIVE_TOKEN = re.compile(r"[!-~]{20,512}")
 DETAIL = re.compile(r"[A-Z][A-Za-z0-9_]{0,39}(?::[0-9]{1,7}:[0-9]{1,7})?")
 HOSTS = frozenset({
     "trends.google.com",
@@ -34,6 +40,7 @@ HOSTS = frozenset({
     "mastodon.social",
     "api.data.gov.my",
     "rss.marketingtools.apple.com",
+    *SINGLE_READ_ORIGINS,
     GDELT_HOST,
 })
 
@@ -103,6 +110,7 @@ class SourceHttp:
         self.clock = clock
         self.addresses = {}
         self.origins = ORIGINS if origins is None else origins
+        self.last_modified = None
 
     def load(self, url):
         try:
@@ -114,6 +122,9 @@ class SourceHttp:
             or target.userinfo or target.host not in HOSTS or target.fragment
         ):
             raise SourceError("url_blocked")
+        if target.host == GITHUB_ARCHIVE_HOST and not _archive_request(target):
+            raise SourceError("url_blocked")
+        self.last_modified = None
         gate = self.origins[target.host]
         with gate.lock:
             if gate.stopped:
@@ -165,7 +176,7 @@ class SourceHttp:
             try:
                 return self._read(target)
             except SourceError as error:
-                if attempt or error.code not in {
+                if attempt or target.host in SINGLE_READ_ORIGINS or error.code not in {
                     "network_error", "http_429", "http_500", "http_502", "http_503", "http_504",
                 }:
                     raise
@@ -187,9 +198,15 @@ class SourceHttp:
         options = {"timeout": httpx.Timeout(read_timeout, connect=CONNECT_TIMEOUT)} if read_timeout else {}
         deadline = self.clock() + max(12, (read_timeout or 0) + 5)
         try:
+            headers = {"User-Agent": USER_AGENT, "Host": target.host, "Accept-Encoding": "identity"}
+            if _archive_request(target):
+                headers["Accept"] = "application/vnd.github.raw+json"
+                token = os.environ.get("RUN_METADATA_TOKEN", "")
+                if ARCHIVE_TOKEN.fullmatch(token):
+                    headers["Authorization"] = f"Bearer {token}"
             with self.client.stream(
                 "GET", url,
-                headers={"User-Agent": USER_AGENT, "Host": target.host, "Accept-Encoding": "identity"},
+                headers=headers,
                 extensions={"sni_hostname": target.host},
                 follow_redirects=False,
                 **options,
@@ -210,6 +227,16 @@ class SourceHttp:
                     if len(body) + len(chunk) > MAX_BODY:
                         raise SourceError("response_too_large")
                     body.extend(chunk)
+                self.last_modified = response.headers.get("Last-Modified")
                 return bytes(body)
         except httpx.HTTPError as error:
             raise SourceError("network_error", detail=type(error).__name__) from None
+
+
+def _archive_request(target):
+    # This is the only source request that may receive the Actions read token.
+    return (
+        target.host == GITHUB_ARCHIVE_HOST
+        and WEIBO_ARCHIVE_FILE.fullmatch(target.path) is not None
+        and target.query == b"ref=master"
+    )

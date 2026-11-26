@@ -10,12 +10,14 @@ from .binding import bind_chat, bound_chat_id, confirm_bind
 from .brief import GeminiWriter, UnavailableWriter
 from .delivery import DeliveryError, TelegramClient, reconcile_delivery, send_parts
 from .diagnostics import diagnostic
+from .expiry import token_expiry_notice
 from .pipeline import (
     MYT, collect_slot, deliver, delivery_callbacks, hour, instant, prepare_report,
     utc_now,
 )
 from .sources import load_sources
 from .storage import CODE_REPO, PrivateGitStore, PublicationError, StorageError, github_object, json_bytes, read_json
+from .weekly import WEEKLY_CRON, WEEKLY_REPORT_ID, prepare_weekly, weekly_archive_key, weekly_key
 from .youtube import fetch_youtube, load_youtube_config, render_youtube
 
 
@@ -158,6 +160,8 @@ def _collection(store, sources, approved, env, execution, created, now):
 def _frozen_payload(store, report_id, approved):
     if report_id.startswith("alert-"):
         path = f"reports/alerts/{report_id}.json"
+    elif WEEKLY_REPORT_ID.fullmatch(report_id):
+        path = weekly_archive_key(report_id)
     else:
         year, month, day = report_id.rsplit("-", 3)[-3:]
         path = f"reports/{year}/{month}/{day}/{report_id}.json"
@@ -204,7 +208,7 @@ def _send_youtube_supplement(store, execution, report_id, main_status, telegram,
                 sent = "UNKNOWN"
                 # The shared writer lock serializes the existence check and this publish-before-send.
                 sent = send_parts(delivery_id, [message], telegram, lambda _: None, save_attempt,
-                                  retry_rate_limit=False)
+                                  retry_rate_limit=False, silent=True)
     except PublicationError:
         # A failed push can leave local commits ahead of the remote. Do not publish again.
         audit_safe = False
@@ -219,17 +223,49 @@ def _send_youtube_supplement(store, execution, report_id, main_status, telegram,
             pass
 
 
+def _token_notice(env, now):
+    status, notice = token_expiry_notice(env.get("DATA_REPO_TOKEN", ""), now)
+    if status != "no_token":
+        print(f"token_expiry status={status}")
+    return notice
+
+
 def _report(store, sources, approved, env, execution, created, now, schedule_from):
-    action = env.get("RADAR_REPORT_ACTION") or "send"
+    action = env.get("RADAR_REPORT_ACTION")
+    event = env["GITHUB_EVENT_NAME"]
     requested = env.get("RADAR_REPORT_ID", "")
-    if env["GITHUB_EVENT_NAME"] == "schedule" and action != "send":
+    if event == "schedule":
+        cron = env.get("RADAR_REPORT_SCHEDULE") or "30 0 * * *"
+        scheduled_action = "weekly" if cron == WEEKLY_CRON else "send"
+        if cron not in {"30 0 * * *", WEEKLY_CRON} or (action and action != scheduled_action):
+            raise StorageError("report_operation_invalid")
+        action = scheduled_action
+    elif action == "weekly" or (action == "weekly-preview" and event != "workflow_dispatch"):
         raise StorageError("report_operation_invalid")
-    if action == "preview":
+    action = action or "send"
+    notice = _token_notice(env, now) if action in {"send", "preview", "resume"} else None
+    if action in {"weekly", "weekly-preview"}:
+        local = now.astimezone(MYT)
+        day = local.date()
+        if action == "weekly":
+            if env["RADAR_STAGE"] != "c-scheduled":
+                raise StorageError("report_operation_invalid")
+            scheduled_day = created.astimezone(MYT).date()
+            if scheduled_day.weekday() != 6 or day != scheduled_day:
+                _audit(store, execution, outcome="missed_late", started_at=now.isoformat(),
+                       report_day=scheduled_day.isoformat())
+                print("report outcome=missed_late")
+                return 1
+            if local.time() < time(9):
+                raise StorageError("report_before_target")
+        report_id = weekly_key(day) if action == "weekly" else f"weekly-preview-{local:%H%M}-{day.isoformat()}"
+        parts = prepare_weekly(store, day, report_id, writer=_writer(env), token_notice=_token_notice(env, now))
+    elif action == "preview":
         # A fresh, separately numbered brief for the Owner to check the format at any time.
         local = now.astimezone(MYT)
         report_id = f"preview-{local:%H%M}-{local.date().isoformat()}"
         parts = prepare_report(store, sources, approved, now, report_id, schedule_from=schedule_from,
-                               writer=_writer(env))
+                               writer=_writer(env), token_notice=notice)
     elif action == "send":
         day = created.astimezone(MYT).date()
         if day != now.astimezone(MYT).date():
@@ -243,9 +279,11 @@ def _report(store, sources, approved, env, execution, created, now, schedule_fro
             raise StorageError("report_before_target")
         report_id = f"{'smoke' if smoke else 'daily'}-{day.isoformat()}"
         parts = prepare_report(store, sources, approved, now, report_id,
-                               target_at=target, schedule_from=schedule_from, writer=_writer(env))
+                               target_at=target, schedule_from=schedule_from, writer=_writer(env), token_notice=notice)
     else:
-        if action not in {"resume", "confirm_received", "confirm_unsent"} or not REPORT_ID.fullmatch(requested):
+        if action not in {"resume", "confirm_received", "confirm_unsent"} or not (
+            REPORT_ID.fullmatch(requested) or WEEKLY_REPORT_ID.fullmatch(requested)
+        ):
             raise StorageError("report_operation_invalid")
         report_id = requested
         parts = _frozen_payload(store, report_id, approved)
@@ -270,7 +308,7 @@ def _report(store, sources, approved, env, execution, created, now, schedule_fro
     _audit(store, execution, outcome=status, started_at=now.isoformat(), report_id=report_id,
            ended_at=utc_now().isoformat(), parts=len(parts))
     print(f"report delivery={status} parts={len(parts)}")
-    if not report_id.startswith("alert-"):
+    if not report_id.startswith(("alert-", "weekly-")):
         _send_youtube_supplement(store, execution, report_id, status, telegram, env.get("YOUTUBE_API_KEY", ""))
     return int(status not in DELIVERED)
 

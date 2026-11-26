@@ -11,7 +11,7 @@ from email.utils import parsedate_to_datetime
 from hashlib import sha256
 from ipaddress import ip_address
 from pathlib import Path
-from urllib.parse import parse_qsl, quote, quote_plus, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, quote_plus, unquote, urlencode, urlsplit, urlunsplit
 from xml.etree.ElementTree import ParseError
 
 import feedparser
@@ -20,15 +20,35 @@ import yaml
 from defusedxml.ElementTree import fromstring
 from defusedxml.common import DefusedXmlException
 
-from .source_http import CONNECT_TIMEOUT, GDELT_HOST, SourceError, SourceHttp
+from .source_http import CONNECT_TIMEOUT, GDELT_HOST, GITHUB_ARCHIVE_HOST, WEIBO_ARCHIVE_PATH, SourceError, SourceHttp
 
 
 DEFAULT_CONFIG = Path(__file__).resolve().parents[1] / "config" / "sources.yaml"
-KINDS = {"trends", "news", "hn", "bluesky", "mastodon", "weather", "gdelt", "chart"}
+KINDS = {"trends", "news", "hn", "bluesky", "mastodon", "weather", "gdelt", "chart", "wiki", "china"}
+HOURLY_SINGLE_READ_KINDS = {"wiki", "china"}
+WEIBO_ARCHIVE_MAX_AGE = timedelta(hours=48)
 GEOS = {"MY", "SG", "ID", "TH", "PH", "VN", "US", "GB", "IN", "JP", "KR", "TW", "HK", "AU"}
 TREND_URL = "https://trends.google.com/trending/rss?geo="
 WEATHER_LINK = "https://www.met.gov.my/en/"
 GDELT_URL = f"https://{GDELT_HOST}/api/v2/doc/doc"
+WIKI_URL = "https://wikimedia.org/api/rest_v1/metrics/pageviews/top-per-country/MY/all-access"
+WIKI_EXCLUSIONS = DEFAULT_CONFIG.with_name("wikipedia-exclusions.yaml")
+WIKI_PROJECT = re.compile(r"([a-z](?:[a-z0-9-]{0,18}[a-z0-9])?)\.wikipedia(?:\.org)?")
+WIKI_NAMESPACES = {
+    "media", "special", "talk", "user", "user talk", "wikipedia", "wikipedia talk", "wp",
+    "file", "image", "mediawiki", "template", "help", "category", "portal", "draft", "module",
+    "timedtext", "topic", "book", "education program", "gadget", "gadget definition",
+    "媒体", "媒體", "特殊", "讨论", "討論", "用户", "用戶", "使用者", "维基百科", "維基百科",
+    "文件", "檔案", "模板", "帮助", "幫助", "分类", "分類", "主题", "主題", "草稿", "模块", "模組",
+    "khas", "perbincangan", "pengguna", "fail", "templat", "bantuan", "kategori", "modul",
+    "istimewa", "pembicaraan", "berkas",
+    "特別", "ノート", "利用者", "ファイル", "テンプレート", "ヘルプ", "カテゴリ", "ポータル", "モジュール",
+}
+WEIBO_ARCHIVE_URL = f"https://{GITHUB_ARCHIVE_HOST}{WEIBO_ARCHIVE_PATH}"
+CHINA_NEWS_URL = "https://www.chinanews.com.cn/rss/scroll-news.xml"
+EXTRA_SOURCE_LABELS = {
+    "wikipedia_my": "维基百科", "weibo_archive": "微博", "chinanews_rss": "中新网",
+}
 # Measured 76 KB of gzip per hour on 2026-11-26; the brief uses one related headline and
 # the newest few dozen stories, so keep two related items and 30 entries per feed.
 RELATED_LIMIT = 2
@@ -53,6 +73,9 @@ SITE_ENDPOINTS = {
     # Apple Marketing Tools charts: official, keyless; robots.txt has no rules (checked 2026-11-26).
     "apple_music_my": ("chart", "https://rss.marketingtools.apple.com/api/v2/my/music/most-played/25/songs.json"),
     "app_store_my": ("chart", "https://rss.marketingtools.apple.com/api/v2/my/apps/top-free/25/apps.json"),
+    "wikipedia_my": ("wiki", WIKI_URL),
+    "weibo_archive": ("china", WEIBO_ARCHIVE_URL),
+    "chinanews_rss": ("china", CHINA_NEWS_URL),
 }
 CHART_LINK_HOSTS = {"music.apple.com", "apps.apple.com"}
 TRACKERS = {"fbclid", "gclid", "dclid", "msclkid", "igshid", "mc_cid", "mc_eid", "mkt_tok"}
@@ -76,11 +99,14 @@ class Source:
 
 
 class SourceItems(list):
-    """Usable observations plus the number of malformed input items."""
+    """Usable observations, malformed input count, and optional source metadata."""
 
-    def __init__(self, rows=(), *, skipped=0):
+    def __init__(self, rows=(), *, skipped=0, data_day=None, fallback=False, archive_updated_at=None):
         super().__init__(rows)
         self.skipped = skipped
+        self.data_day = data_day
+        self.fallback = fallback
+        self.archive_updated_at = archive_updated_at
 
 
 class MalformedItem(SourceError):
@@ -108,7 +134,7 @@ def load_sources(path=None):
 def _validate_source(source):
     if (
         source.kind not in KINDS
-        or source.geo not in GEOS | {"GLOBAL"}
+        or source.geo not in GEOS | {"GLOBAL", "CN"}
         or not isinstance(source.language, str)
         or re.fullmatch(r"[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*", source.language) is None
         or type(source.enabled) is not bool
@@ -317,7 +343,7 @@ def _news(source, body):
     if not feed.version or not feed.feed.get("title") or feed.bozo:
         raise SourceError("feed_schema")
 
-    def parse_item(_rank, entry):
+    def parse_item(rank, entry):
         date = entry.get("published_parsed") or entry.get("updated_parsed")
         published_at = datetime.fromtimestamp(timegm(date), UTC).isoformat() if date else None
         language = entry.get("language") or feed.feed.get("language")
@@ -332,8 +358,13 @@ def _news(source, body):
         title = entry.get("title")
         if source.id == "bernama" and isinstance(title, str):
             title = _bernama_title(title)
+        link = entry.get("link")
+        if source.id == "chinanews_rss":
+            link = _china_news_link(link)
+            if link is None:
+                return None
         row = _observation(
-            source, title, entry.get("link"),
+            source, title, link, rank=rank if source.id == "chinanews_rss" else None,
             published_at=published_at, language=language,
         )
         publisher = entry.get("source")
@@ -527,6 +558,102 @@ def _gdelt(source, get):
     )
 
 
+def _wiki_exclusions():
+    try:
+        values = yaml.safe_load(WIKI_EXCLUSIONS.read_text(encoding="utf-8"))
+        if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+            raise ValueError
+    except (OSError, UnicodeError, ValueError, yaml.YAMLError):
+        raise SourceError("source_config_invalid") from None
+    return {unquote(value).replace("_", " ").strip().casefold() for value in values}
+
+
+def _wikipedia(source, get, now):
+    excluded = _wiki_exclusions()
+
+    def parse_item(_rank, raw):
+        article = _item_object(raw)
+        title = article.get("article")
+        project = article.get("project")
+        if not isinstance(title, str) or not isinstance(project, str):
+            raise MalformedItem("malformed_item")
+        title = unquote(title).strip()
+        clean_title = title.replace("_", " ")
+        host = WIKI_PROJECT.fullmatch(project)
+        prefix, separator, _ = clean_title.casefold().partition(":")
+        namespace = prefix.removesuffix(" talk").removesuffix("讨论").removesuffix("討論").strip()
+        if not host or (separator and namespace in WIKI_NAMESPACES) or clean_title.casefold() in excluded:
+            return None
+        rank, views = article.get("rank"), article.get("views_ceil")
+        if type(rank) is not int or rank < 1 or type(views) is not int or views < 0 or not title:
+            raise MalformedItem("malformed_item")
+        url = f"https://{host[1]}.wikipedia.org/wiki/{quote(clean_title.replace(' ', '_'), safe='')}"
+        return _observation(source, clean_title, url, rank, published_at=published, language=host[1]) | {
+            "views_ceil": views,
+        }
+
+    for offset in (1, 2):
+        day = now.date() - timedelta(days=offset)
+        try:
+            payload = _object(_json(get(f"{source.url}/{day:%Y/%m/%d}")))
+        except SourceError as error:
+            if error.code == "http_404" and offset == 1:
+                continue
+            raise
+        items = _list(payload.get("items"))
+        if not items:
+            continue
+        day_data = _object(items[0])
+        observed_date = tuple(str(day_data.get(key)).zfill(width) for key, width in
+                              (("year", 4), ("month", 2), ("day", 2)))
+        if observed_date != (f"{day.year:04d}", f"{day.month:02d}", f"{day.day:02d}") or day_data.get("country") != "MY":
+            raise SourceError("json_schema")
+        published = datetime.combine(day, datetime.min.time(), UTC).isoformat()
+        articles = _list(day_data.get("articles"))
+        if not articles and offset == 1:
+            continue
+        parsed = _item_rows(articles[:1000], parse_item)
+        ranked = sorted(parsed, key=lambda item: item["rank"])
+        return SourceItems(ranked[:30], skipped=parsed.skipped, data_day=day.isoformat(), fallback=offset == 2)
+    return SourceItems()
+
+
+def _weibo_archive(source, http, now):
+    body = http.load(f"{source.url}/{now:%Y-%m-%d}.json?ref=master")
+    modified = _iso(http.last_modified)
+    if not modified or (stamp := datetime.fromisoformat(modified)) > now + timedelta(minutes=5):
+        raise SourceError("archive_freshness_unavailable")
+    if now - stamp > WEIBO_ARCHIVE_MAX_AGE:
+        raise SourceError("archive_stale")
+
+    def parse_item(rank, raw):
+        entry = _item_object(raw)
+        href = entry.get("url")
+        if not isinstance(href, str) or len(href) > 1300:
+            raise MalformedItem("malformed_item")
+        try:
+            link = urlsplit(href)
+            query = dict(parse_qsl(link.query, max_num_fields=20)).get("q")
+        except ValueError:
+            raise MalformedItem("malformed_item") from None
+        if link.scheme or link.netloc or link.path != "/weibo" or not query or not query.strip():
+            raise MalformedItem("malformed_item")
+        # Display the public link. The client never requests the originating platform.
+        url = f"https://s.weibo.com/weibo?{urlencode({'q': query})}"
+        return _observation(source, entry.get("title"), url, rank, published_at=modified)
+
+    rows = _item_rows(_list(_json(body))[:30], parse_item)
+    rows.archive_updated_at = modified
+    return rows
+
+
+def _china_news_link(url):
+    cleaned = clean_url(url)
+    if cleaned and urlsplit(cleaned).hostname == "www.chinanews.com.cn":
+        return "https://" + cleaned.split("://", 1)[1]
+    return None
+
+
 def collect_source(source, http=None):
     """Collect one configured source. Caller adds the UTC observation time and run ID."""
     _validate_source(source)
@@ -541,6 +668,10 @@ def collect_source(source, http=None):
             return collect_source(source, SourceHttp(client))
     if source.kind == "gdelt":
         rows = _gdelt(source, http.load)
+    elif source.kind == "wiki":
+        rows = _wikipedia(source, http.load, datetime.now(UTC))
+    elif source.id == "weibo_archive":
+        rows = _weibo_archive(source, http, datetime.now(UTC))
     else:
         body = http.load(source.url)
         if source.kind == "hn":
@@ -553,9 +684,11 @@ def collect_source(source, http=None):
                 "mastodon": _mastodon,
                 "weather": _weather,
                 "chart": _chart,
+                "china": _news,
             }[source.kind]
             rows = parser(source, body)
     unique = {}
     for row in rows:
         unique.setdefault(row["content_id"], row)
-    return SourceItems(unique.values(), skipped=rows.skipped)
+    return SourceItems(unique.values(), skipped=rows.skipped, data_day=rows.data_day,
+                       fallback=rows.fallback, archive_updated_at=rows.archive_updated_at)

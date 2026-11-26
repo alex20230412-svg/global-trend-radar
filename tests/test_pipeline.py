@@ -186,7 +186,10 @@ class IsolationTests(unittest.TestCase):
                 for step in job["steps"][:2]:
                     self.assertRegex(step["uses"], r"^actions/[-a-z]+@[0-9a-f]{40}$")
                 if cron:
-                    self.assertEqual(spec["on"]["schedule"], [{"cron": cron}])
+                    schedules = [{"cron": cron}]
+                    if name == "report":
+                        schedules.append({"cron": "0 1 * * 0"})
+                    self.assertEqual(spec["on"]["schedule"], schedules)
                     self.assertIn("github.event_name == 'schedule' && vars.RADAR_STAGE == 'c-scheduled'", job["if"])
                     self.assertEqual(job["concurrency"], {"group": "radar-private-writer",
                                                           "queue": "max", "cancel-in-progress": "false"})

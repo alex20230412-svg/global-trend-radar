@@ -1,15 +1,22 @@
 # STATUS
 
-最后更新 2026-11-26 MYT，Claude。
+最后更新 2026-11-26 MYT，Codex。
 
-## 早报 v5 · 已派给 Codex（2026-11-26）
+## 早报 v5 · C 周日热点周报（2026-11-26）
 
-- Owner 确定整批改动（D-014），任务单见 [Issue #33](https://github.com/alex20230412-svg/global-trend-radar/issues/33)：
-  - 等宽表格加折叠区，🆕 新上榜，YouTube 静音；
-  - 周日周报，私库钥匙到期提醒，修跨栏重复和 AI 编造细节；
-  - 维基百科（马来西亚），中国热议。
-- 来源规则已改：公开、不需登录的来源都可以用，底线是不破解反爬机制、不直接读 robots.txt 禁止的网站。
-- 流程：Codex 分 3 个 PR 提交，Claude 审核合并，发预览给 Owner 确认。
+- 周报统计 MYT 周一至周日实际送达的早报。六栏覆盖持续热点、新冒头、歌曲、App、维基和中国热议，注明缺失日报。复用 Telegram 归档、续发与确认流程。周报使用独立编号，排除 YouTube。
+- Windows 离线套件 195 项通过。周日 09:00 MYT 的 cron 随 C 待审，仅在 `main` 的阶段 C 生效。合并获批后以 `weekly-preview` 验证私聊效果，正式定时验收留到 Owner 启用后。 [周报操作](docs/operations.md#周日热点周报)
+
+## 早报 v5 · B 马来西亚维基百科与中国热议（2026-11-26）
+
+- 纳入马来西亚维基百科浏览榜、GitHub 微博公开存档和中新网 RSS。报告在维基采用备用日期时显示数据日期，在已知微博存档超过 48 小时未更新时提示停更。
+- 知乎候选存档过旧，百度返回格式未核实，B 站热门 API 的 robots 禁止自动读取。B 等待 A 与 Claude 审核。合并后的真实 live-check、分钟数和私库每小时增量待验收。 [来源核查](docs/sources.md#早报-v5-新来源核查d-014)
+
+## 早报 v5 · A 排版与投递准备（2026-11-26）
+
+- PR A 实现等宽表格及折叠区、七天历史新上榜、YouTube 静音、钥匙提醒及 Gemini JSON 校验。新上榜比较 MYT 日界线前七天的已送达日报。旧日报无逐行记录时，只认能由实际发送链接确认的条目。
+- Windows 本地 173 项离线测试通过。合成早报和 YouTube 各 1 段。真实 Telegram 排版和 GitHub 到期提示仍待 Claude 预览复核。
+- PR B 处理维基百科和中国来源，PR C 处理周日周报。三个 Draft PR 分别提供离线验收，等待 Claude 审核与 Owner 预览确认。 [D-014 任务单](https://github.com/alex20230412-svg/global-trend-radar/issues/33)
 
 ## YouTube 热门 · 已启用，真实预览通过（2026-11-26）
 

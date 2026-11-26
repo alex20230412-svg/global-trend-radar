@@ -4,6 +4,28 @@
 
 ---
 
+## 2026-11-26 · Codex · Issue #33 PR C 周报
+
+- C 接在 B 上，完成任务 9。周报复用实际送达的日报条目，按出现天数排榜。缺少前一周数据时注明覆盖，周报归档与日报和 YouTube 分开。新增 `weekly-preview` 和受现有阶段 C 开关保护的周日 09:00 MYT 调度。
+- Windows 实际运行 `.venv/Scripts/python.exe -X utf8 -m unittest discover -s tests -q`，195 项通过，含七天合成汇总、周边界、缺日、分段、调度和防重复。样本脚本打印日报、YouTube 和周报。真实预览与定时验收仍待批准。新增费用 RM0。 [周报操作](docs/operations.md#周日热点周报)
+
+---
+
+## 2026-11-26 · Codex · Issue #33 PR B 来源
+
+- B 接在 A 上，完成任务 7–8。维基榜使用带联系方式的 User-Agent 和两级日期选择。复用现有小时采集、RSS、排行和私有归档。GitHub 只读凭证只用于固定存档请求。小时槽预留标记保护重跑，跨小时仍保留观测。
+- Windows 实际运行 `.venv/Scripts/python.exe -X utf8 -m unittest discover -s tests -q`，185 项通过。合成日报含两个新栏目。公开探查的实际状态和舍弃候选的原因见来源文档。合并获批后补真实 live-check、耗时及私库每小时增量。新增费用 RM0。 [来源核查](docs/sources.md#早报-v5-新来源核查d-014)
+
+---
+
+## 2026-11-26 · Codex · Issue #33 PR A 排版与投递
+
+- 从 `eb68437` 开 `codex/brief-v5-layout`，完成任务 1–6。Telegram 表格以 ASCII 固定列加末尾中文显示，详情独立折叠。模型按 JSON、来源条目 ID 和原文数字校验，原文版使用同一排版。自动置顶未纳入。
+- 私有日报 JSON 新增实际展示条目索引，用于对比过去七天已送达日报。YouTube 继续按 D-013 只在当次进程使用视频字段，独立投递启用静音。专用 PAT 到期十四天内仅在私聊页脚显示提醒。
+- 实际运行 `.venv/Scripts/python.exe -X utf8 -m unittest discover -s tests -q`，173 项通过。依赖、编译及差异检查通过。合成早报和 YouTube 各 1 段，分别为 1,376 和 396 个 UTF-16 单元。未调度真实预览或调整 Secrets。 [任务单](https://github.com/alex20230412-svg/global-trend-radar/issues/33)
+
+---
+
 ## 2026-11-26 · Claude · 早报 v5 任务单与来源规则改动
 
 - Owner 看过模拟效果后，确定排版和整批功能。来源规则按 Owner 指示放宽（D-014），并已改写 AGENTS.md。

@@ -13,7 +13,7 @@ from .delivery import _message_text
 from .pipeline import (
     GOOD, MYT, SOURCE_ERROR_CODES, collect_slot, instant, partition, prepare_report, utc_now,
 )
-from .sources import SourceError, SourceItems, collect_source, load_sources
+from .sources import HOURLY_SINGLE_READ_KINDS, SourceError, SourceItems, collect_source, load_sources
 from .source_http import CONNECT_TIMEOUT, DETAIL, SourceHttp
 from .storage import CODE_REPO, StorageError, _run_git, _write_files, read_json, read_observations
 
@@ -168,10 +168,10 @@ def _source_line(source_id, state, probe, observed_rows, now):
     if re.fullmatch(r"[a-z][a-z0-9_]{0,63}", source_id) is None:
         raise ValueError("invalid_source_id")
     status = state["status"]
-    if status not in {"ok", "empty", "error"}:
+    if status not in {"ok", "empty", "error", "stale"}:
         raise ValueError("invalid_probe_status")
     age = _newest_age(observed_rows, now)
-    reason = _public_reason(probe.reason) if status == "error" else "-"
+    reason = _public_reason(probe.reason) if status in {"error", "stale"} else "-"
     return (
         f"source={source_id} status={status} count={state['count']:d} skipped={state.get('skipped', 0):d} "
         f"http={_http_status(probe.http_status) or '-'} newest_age_min={age if age is not None else '-'} "
@@ -197,7 +197,8 @@ def _report_line(parts, counts, degraded):
 
 def _check_replay(store, start, first, second, eligible, archive):
     audit = read_json(store, "runs/live-check-2.json")
-    failures = [source.id for source in eligible if first["sources"][source.id]["status"] == "error"]
+    failures = [source.id for source in eligible if source.kind not in HOURLY_SINGLE_READ_KINDS
+                and first["sources"][source.id]["status"] == "error"]
     if (
         audit["attempted_sources"] != failures or audit["rows_added"] != 0
         or second["sha256"] != first["sha256"] or second["row_count"] != first["row_count"]

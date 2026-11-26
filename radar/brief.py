@@ -18,11 +18,11 @@ import httpx
 from .delivery import split_parts
 from .layout import entry_key, quote_blocks, table_block, table_header, table_row, table_width
 from .scoring import instant, trend_key
-from .sources import clean_url
+from .sources import _wiki_exclusions, clean_url
 
 
 MYT = timezone(timedelta(hours=8), "MYT")
-PROMPT_VERSION = "brief-v5.3"
+PROMPT_VERSION = "brief-v5.4"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 # Flash follows the format and the no-invention rule better than Flash-Lite (first live run).
 GEMINI_MODELS = ("gemini-flash-latest", "gemini-flash-lite-latest")
@@ -46,7 +46,7 @@ SOURCE_NAMES = {
     "wikipedia_my": "马来西亚维基百科", "weibo_archive": "微博存档", "chinanews_rss": "中新网", "baidu_hot": "百度热搜",
 }
 SYSTEM_PROMPT = """你为马来西亚华人编辑中文热点早报。只返回 JSON 对象 items 和 ideas。
-items 的每行包含原样 id、label、why。label 是最多 8 个中文字的主题，why 是一句简体中文原因。
+items 的每行包含原样 id、label、why。label 是 8 个中文字以内的主题（例如「曲棍球队晋级」「公寓发生火灾」，太长会被截断），why 是一句简体中文原因。
 优先保留马来西亚热搜，依照输入顺序。中国热议从候选选至多 8 条，维基从前 30 条选至多 5 条，排除色情或成人内容。
 malaysia、other、china 的 label 必须是中文，概括发生了什么事；即使搜索词是英文、马来文或人名也要这样写，例如搜索词是人名时，写成「前部长撤回诉讼」「乐队吉他手逝世」这类事件描述，而不是照抄名字。可以用通行的中文译名，不要自创音译。
 wiki 的 label 可以保留条目原名。歌曲名由程序显示原文。App 的 label 写 2 到 5 个字的用途（例如 网购、电子钱包、直播带货），why 用一句话说明用途。不要重复同一人物、事件或作品。
@@ -130,6 +130,8 @@ HEADINGS = {
 }
 ARCHIVE_SECTIONS = {"other": "global"}
 SHORT_LABELS = {"中新网": "中新"}
+# Up to 12 characters; the table cuts anything past its width, the details show it in full.
+LABEL_MAX_WIDTH = 24
 HIDDEN_KEYS = {"link", "original_url", "also_searched_in", "countries", "volume", "views", "key"}
 
 
@@ -175,6 +177,13 @@ def _select_unique(rows, limit, seen):
         if len(selected) == limit:
             break
     return selected
+
+
+def _wiki_excluded():
+    try:
+        return _wiki_exclusions()
+    except Exception:
+        return set()
 
 
 def _numbered(rows, prefix):
@@ -232,8 +241,11 @@ def collect_items(snapshot):
     }
     other = [*snapshot.get("monitored_regions", []), *snapshot.get("rising", []), *snapshot.get("new", [])]
     items["other"] = _numbered(_select_unique(_topics(other, "countries"), LIMITS["other"], seen), "o")
+    excluded = _wiki_excluded()
     for section, prefix in (("china", "c"), ("wiki", "k")):
         candidates = (_candidate(row) for row in snapshot.get(section, []))
+        if section == "wiki":
+            candidates = (row for row in candidates if row["title"].casefold() not in excluded)
         candidates = (row for row in candidates if row["title"] and row["link"]
                       and not (section == "wiki" and ADULT.search(row["title"])))
         items[section] = _numbered(_select_unique(candidates, 30, set(seen)), prefix)
@@ -351,7 +363,7 @@ def _model_json(text, items):
         reference = numbers(_reference(by_id[key]))
         # Check the label and the reason separately: an invented number in one drops only that part,
         # and the source title or headline is shown in its place.
-        label_ok = bool(label) and table_width(label) <= 16 and not numbers(label) - reference
+        label_ok = bool(label) and table_width(label) <= LABEL_MAX_WIDTH and not numbers(label) - reference
         why_ok = bool(why) and not numbers(why) - reference
         annotations[key] = (label if label_ok else "", _clean(why, 42) if why_ok else "")
     if not any(annotations.get(row["id"], ("", ""))[0] for row in items["malaysia"]):

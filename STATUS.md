@@ -1,15 +1,13 @@
 # STATUS
 
-最后更新 2026-11-26 MYT，Codex。
+最后更新 2026-11-26 MYT，Claude。
 
-## 阶段 B 准备 · 等待 Claude 审核
+## 阶段 B · 无凭证实测通过，等待 Owner 一次设置凭证
 
-Claude 已按授权合并 PR #5、#7、#8。Issue #9 的 T1–T5 从最新 `main`（`5cedf11`）在 `codex/phase-b-sources` 分支交付，等待 Claude 审核及 Owner 合并批准。 [任务单及审批记录](https://github.com/alex20230412-svg/global-trend-radar/issues/9)
-
-- D-010 在分支配置启用原有 23 个来源的最少字段和 14 个 Trends 的「为什么热」。新增当今大马官方中文 RSS，合计 24 个启用配置。来源审批、运行配置与实测证据分开记录。 [来源证据表](docs/sources.md)
-- GDELT 有两组 DOC API 查询及按主机的 5 秒间隔，已用 Mock 验证。生产关闭，合并后由 Claude 在 `live-check` 单独查 Actions 连通性。
-- `live-check` 只许在 `main` 手动触发，使用临时本地 Git 验证每源探测、同槽重跑和 Telegram 分段。Mock 带哨兵验证日志不包含标题、链接和响应。首次实际 Actions 探测留待本 PR 合并后，当前 L4、L5 都是 0。
-- 本地离线验收为 116 项通过，并检查依赖、编译及差异。合成日报输出和 PR Linux CI 证据随 Draft PR 与 Issue #9 交付。原真实工作流 cron 仍为注释。
+- PR #10（Codex）已审核并合并。Claude 在 main 运行 `live-check` 5 次，修复了来源地址变更、中文 RSS 语言声明、超时和诊断问题（PR #11–#13）。最后两次运行 **24/24 来源正常**，两次采集幂等，日报 1 段约 3,500 字，未降级。 [实测记录](docs/sources.md)
+- GDELT 从 GitHub runner 一直连不上（`ConnectTimeout`），保持关闭。华文媒体目前只有当今大马中文版；其他报社没有可核实的官方 RSS，见 [华文来源核查](docs/chinese-sources.md)。
+- 私库已确认为 Private、默认分支 `main`。会话代理禁止 AI 设置 environment、variables 和 secrets，所以由 Owner 按 [运行手册第二节](docs/operations.md) 一次完成 6 步，之后由 Claude 负责采集、绑定、发日报和核对私库。
+- cron 仍为注释，`RADAR_STAGE` 未设置。新增费用 RM0。
 
 ## Claude 收尾修订（PR #8）
 

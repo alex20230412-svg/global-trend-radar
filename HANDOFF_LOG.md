@@ -4,6 +4,15 @@
 
 ---
 
+## 2026-11-26 · Claude · 阶段 B 无凭证实测通过
+
+- 依 Owner 指示合并 PR #10（Codex，T1–T5），并在 main 运行 `live-check` 5 次。发现并修复：当今大马英文和中文 RSS 及 MET API 地址变更（301）、中文 RSS 声明的语言错误、GDELT 读取超时（PR #11）；新增只含类名、位置和结构标签的失败诊断（PR #12）；连接超时放宽到 8 秒（PR #13）。
+- 最后两次运行 24/24 来源正常，两次采集幂等，日报 1 段约 3,500 字，未降级。GDELT 从 GitHub runner 一直 `ConnectTimeout`，保持关闭。
+- 会话代理禁止 AI 设置 environment、variables、secrets 和 Actions 权限，改由 Owner 一次完成（运行手册第二节）。私库已确认为 Private、`main` 存在、只有 README。
+- 下一步：Owner 完成 6 步设置并按 Start 后，Claude 依次运行 collect、`bind_chat`、`confirm_bind`、report send，并用只读权限核对私库。费用 RM0。
+
+---
+
 ## 2026-11-26 · Codex · Issue #9 阶段 B 准备
 
 - 从 `main` 的 `5cedf11` 开 `codex/phase-b-sources`，记录 D-010。原有 23 个来源开启最少字段，14 个 Trends 开启相关新闻背景。当今大马中文 RSS 加入现有主机白名单范围，和英文版在独立媒体计数中合并。

@@ -88,6 +88,22 @@ class RankingTests(unittest.TestCase):
         ]).snapshot
         self.assertEqual(1, len(result["malaysia"][0]["media"]))
 
+    def test_bilingual_malaysiakini_is_one_independent_publisher(self):
+        english_url = "https://example.org/english-item"
+        chinese_url = "https://example.org/chinese-item"
+        result = report([
+            observed("Synthetic weather theme", related=[{"url": english_url}, {"url": chinese_url}]),
+            observed("Example weather notice", source="malaysiakini", kind="news", url=english_url),
+            observed("合成气象资讯", source="malaysiakini_zh", kind="news", url=chinese_url, language="zh",
+                     publisher="當今大馬"),
+        ])
+
+        self.assertEqual(1, len(result.snapshot["malaysia"][0]["media"]))
+        self.assertEqual({"malaysiakini", "malaysiakini_zh"},
+                         {item["source_id"] for item in result.snapshot["local_news"]})
+        self.assertIn("当今大马（中文）", result.markdown)
+        self.assertNotIn("马来西亚华文来源本期暂无可用数据", result.markdown)
+
     def test_undated_bernama_story_uses_retained_first_discovery(self):
         url = "https://bernama.example/still-in-feed"
         result = report([
@@ -219,6 +235,9 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(1, len(parts))
         self.assertEqual("compact-v1", result.snapshot["digest_version"])
         plain = "\n".join(block.plain for block in result.blocks)
+        self.assertIn("↳ 为什么热 · ", plain)
+        self.assertIn("当今大马（中文）", plain)
+        self.assertGreater(result.snapshot["rendered_counts"]["fresh"], 0)
         for title in ("星港购物节公开低耗雾灯新品与折扣", "月湾 AI 课堂助教开放离线多语试用"):
             self.assertEqual(1, plain.count(title))
 

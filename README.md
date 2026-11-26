@@ -4,7 +4,7 @@ Free automated trending-topic radar for Malaysia and the world.
 
 全球热点雷达收集马来西亚及监测地区的搜索飙升、本地媒体和社交科技信号，保存小时观测，生成 08:30 MYT 私人 Telegram 日报。报告包含热门榜、新出现及升温、社交科技、气象和覆盖缺口。
 
-> **当前状态为阶段 A 离线开发交付。** 等待 Claude 独立审核与 Owner 批准阶段 B。定时触发尚未启用。 [状态](STATUS.md)
+> **当前状态为阶段 B 的来源和无凭证检查准备。** Draft PR 等待 Claude 审核。定时触发尚未启用。 [状态](STATUS.md)
 
 ## 先读这些
 
@@ -46,7 +46,7 @@ python -m pip --isolated --disable-pip-version-check install --no-cache-dir --in
 python -m unittest discover -s tests -v
 ```
 
-阶段 A 默认关闭真实入口。后续独立批准时，按运行手册在公开代码仓库的 `radar-live` 环境设置 Secrets。 [运行手册](docs/operations.md)
+合并并通过审核后，Claude 先在 `main` 运行无业务凭证的来源与本地 Git 空跑检查。验证通过后再安排 Telegram 和私库设置。 [运行手册](docs/operations.md)
 
 ## 怎么参与讨论
 

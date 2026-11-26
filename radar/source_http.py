@@ -16,6 +16,8 @@ USER_AGENT = "GlobalTrendRadar/1.0 (+https://github.com/alex20230412-svg/global-
 MAX_BODY = 2 * 1024 * 1024
 RETRY_SECONDS = 10
 MIN_INTERVAL = 0.5
+GDELT_HOST = "api.gdeltproject.org"
+ORIGIN_MIN_INTERVALS = {GDELT_HOST: 5.0}
 HOSTS = frozenset({
     "trends.google.com",
     "www.malaysiakini.com",
@@ -26,6 +28,7 @@ HOSTS = frozenset({
     "public.api.bsky.app",
     "mastodon.social",
     "api.data.gov.my",
+    GDELT_HOST,
 })
 
 
@@ -117,10 +120,11 @@ class SourceHttp:
                 raise
 
     def _load(self, target, gate):
+        interval = ORIGIN_MIN_INTERVALS.get(target.host, MIN_INTERVAL)
         if gate.robots is None:
             robots_url = target.copy_with(path="/robots.txt", query=None)
             try:
-                robots = self._request(robots_url, gate, MIN_INTERVAL)
+                robots = self._request(robots_url, gate, interval)
             except SourceError as error:
                 if error.code not in {"http_404", "http_410"}:
                     raise
@@ -136,7 +140,7 @@ class SourceHttp:
             raise SourceError("robots_denied")
         rate = robots.request_rate(USER_AGENT)
         wait = max(
-            MIN_INTERVAL,
+            interval,
             robots.crawl_delay(USER_AGENT) or 0,
             rate.seconds / rate.requests if rate is not None and rate.requests > 0 else 0,
         )

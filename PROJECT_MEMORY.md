@@ -20,8 +20,8 @@ Owner 的目标是一套能长期自动运行的系统，而不是只能演示�
 
 - Owner 尚未确定商业方向；先发现全球与马来西亚的流行趋势，再寻找商业机会。不限制行业，优先可由 AI 自动化的商机。
 - 资讯仅供 Owner 私人使用，第一轮向独立 Telegram Bot 私聊发送中文报告。禁止两个 AI 自动循环对话。
-- D-007 记录前期由 Owner 手动触发验证的边界。2026-11-26 的 D-009 授权开发和离线验收，真实手动测试及定时运行各自等待批准。
-- 依据见 DECISIONS.md D-005 至 D-009。 [方向记录](https://github.com/alex20230412-svg/global-trend-radar/issues/4#issuecomment-7167038713) · [第一轮审核](https://github.com/alex20230412-svg/global-trend-radar/issues/6#issuecomment-7167409077)
+- D-007 记录前期由 Owner 手动触发验证的边界。D-009 授权开发和离线验收。D-010 批准来源的最少字段和 Trends「为什么热」，规定阶段 B 先由 Claude 在受审的 `main` 无凭证实测。
+- 依据见 DECISIONS.md D-005 至 D-010。 [方向记录](https://github.com/alex20230412-svg/global-trend-radar/issues/4#issuecomment-7167038713) · [阶段 B 决定](https://github.com/alex20230412-svg/global-trend-radar/issues/9)
 
 ## 范围
 
@@ -38,4 +38,4 @@ Owner 的目标是一套能长期自动运行的系统，而不是只能演示�
 
 ## 阶段流程
 
-第一轮按 D-009 依次经过阶段 A 离线开发、阶段 B 手动验证、阶段 C 定时运行验收。阶段 B 与 C 分别由 Owner 批准，阶段 C 包含七天稳定性关口。长期扩展见 docs/PLAN.md。
+阶段 A 为离线开发。阶段 B 依 D-010 先做无凭证实测，验证通过后才进入 Owner 批准的真实私聊与私库验收。阶段 C 的定时运行需单独批准，并保留七天稳定性关口。长期扩展见 docs/PLAN.md。

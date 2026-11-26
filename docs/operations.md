@@ -1,43 +1,36 @@
-# 阶段 B 手动测试与阶段 C 运行手册
+# 阶段 B 启用与阶段 C 运行手册
 
-本轮停在阶段 A。以下操作在 Claude 独立审核和 Owner 单独批准阶段 B 后执行。阶段 C 的 cron 激活另行审核批准。
+执行顺序依据 D-010。Claude 已经依 Owner 授权将 PR #5、#7、#8 合并进 `main`。这次的来源与无凭证工作流由 Claude 审核，Owner 同意后才合并。阶段 C 的 cron 激活另行审批。 [Issue #9](https://github.com/alex20230412-svg/global-trend-radar/issues/9)
 
-## 阶段 B 上线前置条件
+## 一、Claude 先做无凭证实测
 
-阶段 A 的 PR #7 依赖 PR #5。PR #5 由 Owner 决定是否合并。合并后，将阶段 A 提交整理到新的 `main`，将 PR #7 的目标改为 `main` 并复核差异。阶段 B 获批及代码由 Owner 合并后，真实工作流才可以接受设置。
+1. 审核通过并合并后，在 **Radar live check → Run workflow → main** 手动运行，保留运行链接和固定格式汇总。该作业用公开仓库标准 runner，独立并发组和临时本地 Git，设有 10 分钟上限。 [live-check 工作流](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/live-check.yml)
+2. 核对每个启用来源的 `status`、`count`、`skipped`、HTTP 和新鲜度。同一小时两次调用采集流程，第二次跳过已成功的来源，检查观测文件校验和一致。单列检查 GDELT 的试探结果。GDELT 生产配置只有确认 Actions 连通并在后续审核中更新后才能开启。
+3. 查报告是否为一段、是否降级、各栏目和「为什么热」计数是否合理。报告和观测只在当次 runner 本地临时目录生成。公开证据只引用状态与数字，合成日报由 PR 离线 CI 展示。来源失败、过旧、覆盖不足或格式不符时，按 Issue #9 退回修复。通过者按来源证据表记载日期与适用的等级。 [来源证据表](sources.md)
 
-来源审批以审核后的 `config/sources.yaml` 为准。Owner 确认一批来源及其保存权后，只将对应条目的 `retention` 从 `pending` 改为 `long_term` 并提交审核。执行时默认选用所有 `enabled: true`、`retention: long_term` 的条目。`RADAR_APPROVED_SOURCES` 留空即可，有需要时填写空格分隔的 ID 缩小范围。当前只有天气符合条件，MY 榜和全球核心榜的验收需要先确认核心来源。日报里的「为什么热」（每个热词附第一条相关报道的标题和媒体名）由 Trends 条目的 `retain_related` 开关控制：Owner 批准后把对应条目改为 `true`，相关报道标题、链接和媒体名随观测存入私库，日报即自动显示；未批准时日报不显示，也不保存。 [来源证据表](sources.md)
+本步骤不需要业务凭证、environment 或 `RADAR_STAGE`。实际执行前无须 Owner 填写任何东西。
 
-## 阶段 B 浏览器和手机设置
+`source` 行的 `newest_age_min` 按最近有效发布日期计算，GDELT 用索引时间，无日期时为 `-`。合法的气象空结果可接受，表示该次未见警告。 `report` 行的 `chars` 为每段解析后的 UTF-16 单元数，`fresh` 计展示中标为新出现或升温的趋势，`with_context` 计显示相关新闻背景的条目，`platforms` 计有内容的平台栏目。GDELT 探测默认随手动检查执行，单列结果不影响已启用来源的报告与验收。
 
-1. 在官方 BotFather 发送 `/newbot`，创建项目专用 Bot。保存 BotFather 发给你的 Token，稍后直接填入 GitHub。 [@BotFather](https://t.me/BotFather) · [官方说明](https://core.telegram.org/bots/features#botfather)
-2. 确认专用数据仓库为 **Private**、默认分支为 `main` 且 Actions 已关闭。空仓库可添加一份空白说明，使 `main` 存在。创建限期 **fine-grained PAT**，Repository access 选 **Only select repositories**，只选 `global-trend-radar-data`，仓库权限仅增加 **Contents: Read and write**，保留 GitHub 默认的 Metadata read。 [私库 Actions 设置](https://github.com/alex20230412-svg/global-trend-radar-data/settings/actions) · [创建 PAT](https://github.com/settings/personal-access-tokens/new)
-3. 在公开代码仓库创建 `radar-live` Environment，将部署分支限制为 **Selected branches and tags → Branch `main`**。填写下表的两个 **Environment secrets**。批准阶段 B 后，在 **Actions Variables** 将 `RADAR_STAGE` 设为 `b-manual`。`RADAR_SCHEDULE_FROM` 留到阶段 C。 [Environment 设置](https://github.com/alex20230412-svg/global-trend-radar/settings/environments) · [Actions Variables](https://github.com/alex20230412-svg/global-trend-radar/settings/variables/actions)
-4. 打开自己刚创建的 Bot 的私人对话，发送一条 `/start`。在 15 分钟内启动绑定，确保该 Bot 专用于本项目。
-5. 在 **Radar report → Run workflow → main** 选择 `bind_chat`。在自己与该 Bot 的私聊里看到通用绑定消息后，在同一工作流选择 `confirm_bind`，于发起绑定的 30 分钟内完成。收到 `BOUND` 后才可发送日报。Chat ID 由程序保存到私库，两个动作均无需填写 Chat ID 或其他工作流输入。 [Radar report](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/report.yml)
+## 二、全项实测通过后，Owner 一次配置
 
-| Environment Secret 名称 | 填写值及用途 |
+Claude 经 Owner 同意创建或配置公开代码仓库的 `radar-live` environment，只允许 `main` 部署。Claude 先确认项目专用数据仓库为 Private，具有默认 `main` 且 Actions 已关闭。 [Environment 设置](https://github.com/alex20230412-svg/global-trend-radar/settings/environments) · [私库 Actions 设置](https://github.com/alex20230412-svg/global-trend-radar-data/settings/actions)
+
+| Owner 操作 | 凭证范围 |
 | --- | --- |
-| `TELEGRAM_BOT_TOKEN` | BotFather 颁给这个新 Bot 的 Token，用于验证并发送私聊。 |
-| `DATA_REPO_TOKEN` | 专用私有数据仓库的 fine-grained PAT，用于持久化及读回。 |
+| 在官方 BotFather 发送 `/newbot` 创建项目专用 Bot。 | 把新 Token 直接填到 `radar-live` 的 `TELEGRAM_BOT_TOKEN`。 |
+| 创建限期 fine-grained PAT | **Only select repositories**，只选 `global-trend-radar-data`。权限仅增加 **Contents: Read and write**，保留 GitHub 默认 Metadata read。把 PAT 直接填到同一 environment 的 `DATA_REPO_TOKEN`。 |
+| 在自己与新 Bot 的私人对话里发送一次 `/start` | 发送后告知 Claude，供接下来的 15 分钟绑定窗口使用。Chat ID 由程序保存在专用私库。 |
 
-如有多个候选私聊，绑定会停止。若没有在自己的私聊收到通用确认，保持未确认，等 30 分钟到期后发送新的 `/start`。如果 Bot 已有无法核对的消息队列，先暂停并复核绑定台账。`python -m tools.get_chat_id` 保留为本人本地排查工具。密钥只填 GitHub Environment，Chat ID 留在专用私库。 [Telegram getUpdates](https://core.telegram.org/bots/api#getupdates)
+凭证只填 GitHub Environment。 [BotFather](https://t.me/BotFather) · [创建 fine-grained PAT](https://github.com/settings/personal-access-tokens/new) · [Environment 设置](https://github.com/alex20230412-svg/global-trend-radar/settings/environments)
 
-## 阶段 B 首次手动运行
+## 三、Claude 验证真实私聊与私库
 
-Owner 只负责点按钮和看 Telegram，数据核对由 AI 完成。每一步做完，在对话里告诉 AI「做完第 N 步」即可。
+1. 经 Owner 同意设置 `RADAR_STAGE=b-manual`。来源默认由审核后的 `enabled: true` 与 `retention: long_term` 控制。`RADAR_APPROVED_SOURCES` 只用于缩小范围，通常留空。执行受审 `main` 的 **Radar collect**，并依测试顺序核对同槽重跑与不同时槽的真实观测。 [Radar collect](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/collect.yml)
+2. 通过 Owner 授权且由 GitHub 识别为仓库 Owner 的会话发起 `bind_chat`。Owner 在自己的 Bot 私聊看到通用确认后告知 Claude，再用同一身份在 30 分钟内发起 `confirm_bind`。只有 `BOUND` 才可继续。若无法以 Owner 身份操作，相应绑定动作交由 Owner 点击。绑定存在多个候选或收件人不明时暂停核对。 [Radar report](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/report.yml)
+3. 发起 `report send`，由 Owner 确认收到私聊。经单独授权的临时只读访问核对专用私库的观测、校验和、来源状态和投递回执，再撤去只读访问。用同日重跑确认已发送段数不增加。公开报告只记录数量和状态。
 
-| 步骤 | Owner 做 | AI 核对 |
-| --- | --- | --- |
-| 1 | 在 [Radar collect](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/collect.yml) 点 **Run workflow → main**，等它变成绿色或红色。 | 读公开日志，只应出现 `collect outcome=…` 这类结果码；8 分钟内结束。 |
-| 2 | 同一小时内再点一次 collect。 | 私库当小时 `observations`、`manifests`、`runs` 存在且校验和一致；第二次只补失败来源，成功来源跳过。 |
-| 3 | 隔一小时以上再点一次 collect。 | 相邻两个小时分区各有独立 `observed_at`、地区、量级与排名；真实来源返回新鲜数据。 |
-| 4 | 在 [Radar report](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/report.yml) 选 `action=send` 点 Run，然后看 Telegram 私聊有没有收到 `smoke-日期` 日报、收到几段。 | 私库投递流水逐段为 `SENT`，有 payload 哈希、尝试次数和 Telegram 回执 ID；日报中文、MYT 时间、链接和来源状态正确。 |
-| 5 | 同一天再点一次 report `send`，确认 Telegram **没有**收到第二份。 | 投递流水未新增发送；记录持续时间、并发、日志、标准 runner 与 RM0 证据，来源符合条件时再升级证据等级。 |
-
-AI 核对私库需要只读权限：Owner 在 AI 会话里临时把 `global-trend-radar-data` 加入（例如 Claude 的 add_repo，或 Codex 的仓库连接），核对完成后移除。AI 不向私库写入，也不把私库内容贴到公开仓库，只在公开文档记录汇总。
-
-若出现 `RATE_LIMITED`，等私库 `retry_at` 后用 `resume`。若出现 `UNKNOWN` 或 `SENDING`，按下方「暂停、恢复和清理」核对。失败补齐、429 和送达歧义的故障注入只用离线 Mock，真实验收只记录自然出现的异常。
+如出现 `RATE_LIMITED`，按私有台账的 `retry_at` 等待。若为 `UNKNOWN` 或 `SENDING`，按下方操作核对。临时跑仍遵守 RM0 和来源条款。
 
 ## 阶段 C 启用与验收
 

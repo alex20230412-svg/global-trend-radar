@@ -18,6 +18,9 @@ VOLUME = re.compile(r"(?:(?:[0-9]{1,3}(?:,[0-9]{3})+)|[0-9]+)(?:\.[0-9]+)?[ ]*[k
 RANK_MISSING = 1000000
 PUBLISHERS = {
     "malaysiakini": "malaysiakini",
+    "malaysiakini_zh": "malaysiakini",
+    "当今大马": "malaysiakini",
+    "當今大馬": "malaysiakini",
     "malay_mail": "malay mail",
     "fmt": "free malaysia today",
     "bernama": "bernama",
@@ -161,8 +164,8 @@ def _article_matcher(trends, news, config):
             for topic, identities in matches.items()}
 
 
-def _independent_media(articles, config):
-    """Use one article per publisher and collapse duplicate wire headlines."""
+def _independent_media(articles, config, *, distinguish_language=False):
+    """Collapse duplicate wire headlines and group by publisher."""
     accepted = []
     evidence = sorted(articles, key=lambda item: (item.article_at, item.source, item.url))
     for item in evidence:
@@ -177,9 +180,10 @@ def _independent_media(articles, config):
         name = item.row.get("publisher") or PUBLISHERS.get(item.source, item.source)
         publisher = trend_key(name)
         publisher = PUBLISHERS.get(publisher, publisher)
-        if publisher in publishers or item.source in by_source:
+        edition = (publisher, item.row.get("language")) if distinguish_language else publisher
+        if edition in publishers or item.source in by_source:
             continue
-        publishers.add(publisher)
+        publishers.add(edition)
         by_source[item.source] = item
     return by_source
 
@@ -386,7 +390,10 @@ def rank_observations(rows, coverage, now, config, historical_coverage):
     current = list(_current_rows(evidence, coverage))
     eligible_news = {(item.source, item.at, item.url) for item in news}
     news_current = [item for item in current if (item.source, item.at, item.url) in eligible_news]
-    local_news = sorted(_independent_media(news_current, config).values(), key=row_priority, reverse=True)
+    local_news = sorted(
+        _independent_media(news_current, config, distinguish_language=True).values(),
+        key=row_priority, reverse=True,
+    )
     social = defaultdict(list)
     for item in sorted(current, key=lambda item: (item.rank, item.source, item.key)):
         if item.row["kind"] in {"hn", "bluesky", "mastodon"}:

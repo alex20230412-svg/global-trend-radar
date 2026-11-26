@@ -1,10 +1,15 @@
 # STATUS
 
-最后更新 2026-11-26 MYT，Claude。
+最后更新 2026-11-26 MYT，Codex。
 
-## 当前阶段 A · WAIT_OWNER
+## 阶段 B 准备 · 等待 Claude 审核
 
-根据 D-009 开发和离线验收。Codex 的阶段 A 在 PR #7（`codex/phase-a-trend-collection`）。Owner 于 2026-11-26 授权 Claude 执行收尾修订，交付为叠加在 PR #7 之上的 Draft PR #8（`claude/phase-a-fixes`）。PR #5 尚未合并。等待 Owner 决定来源批次、「为什么热」开关、合并顺序及是否批准阶段 B。 [PR #5](https://github.com/alex20230412-svg/global-trend-radar/pull/5) · [PR #7](https://github.com/alex20230412-svg/global-trend-radar/pull/7) · [PR #8](https://github.com/alex20230412-svg/global-trend-radar/pull/8)
+Claude 已按授权合并 PR #5、#7、#8。Issue #9 的 T1–T5 从最新 `main`（`5cedf11`）在 `codex/phase-b-sources` 分支交付，等待 Claude 审核及 Owner 合并批准。 [任务单及审批记录](https://github.com/alex20230412-svg/global-trend-radar/issues/9)
+
+- D-010 在分支配置启用原有 23 个来源的最少字段和 14 个 Trends 的「为什么热」。新增当今大马官方中文 RSS，合计 24 个启用配置。来源审批、运行配置与实测证据分开记录。 [来源证据表](docs/sources.md)
+- GDELT 有两组 DOC API 查询及按主机的 5 秒间隔，已用 Mock 验证。生产关闭，合并后由 Claude 在 `live-check` 单独查 Actions 连通性。
+- `live-check` 只许在 `main` 手动触发，使用临时本地 Git 验证每源探测、同槽重跑和 Telegram 分段。Mock 带哨兵验证日志不包含标题、链接和响应。首次实际 Actions 探测留待本 PR 合并后，当前 L4、L5 都是 0。
+- 本地离线验收为 116 项通过，并检查依赖、编译及差异。合成日报输出和 PR Linux CI 证据随 Draft PR 与 Issue #9 交付。原真实工作流 cron 仍为注释。
 
 ## Claude 收尾修订（PR #8）
 
@@ -46,9 +51,9 @@ PR #8 的 Linux CI（ubuntu-24.04、CPython 3.14.10、哈希锁定 wheel）为 `
 
 ## 阶段 B 和 C 待办
 
-- 逐源补足授权及 L2 证据。目前只有 MET 气象明确允许按 CC BY 4.0 保留。MY 与全球核心榜仍需取得最少字段的长期保存及个人私聊转发依据。
-- 分别批准真实手动采集、真实私聊和后续定时部署。在真实环境确认来源可用、私库读写、Telegram 投递、8 分钟上限、并发和环境隔离。
+- Claude 审核、Owner 同意后合并本 PR。Claude 在 `main` 先做无业务凭证的实测，核对来源、新鲜度、同槽幂等与真实数据的一段日报。GDELT 结果单列，连通与后续审核均通过才启用。
+- 全项通过后才通知 Owner 一次性设置 Bot 和专用 PAT。Owner 另行同意环境和阶段变量后，Claude 验证真实私聊和私库；凭证只留在 GitHub Environment。 [运行手册](docs/operations.md)
 - 首 24 小时至少 20 个有效、持久化的计划采集槽，核对连续 3 天日报时间及第 7 天稳定性。
 - 阶段 C 前处理两项长期运行问题：一是公开仓库 60 天无提交会停用定时任务，需要保活方案；二是私库容量。按估算每小时约 500 条观测，压缩后每天约 1 MB 级，加上 first-seen 分片持续增长，约一年会接近 512 MiB 停止阈值。阶段 B 先实测每小时实际字节数，再决定归档压缩或分片清理策略（未核实，仅估算）。 [凭证和首次手动测试](docs/operations.md)
 
-覆盖尚无马来西亚华文专源、主要社交平台或电商销量。GitHub 定时可能迟到、漏跑或因无活动停止。同一平台整体中断或 PAT 失效时，Telegram 告警可能无法安全提交。私库容量及 Git 历史删除的限制见运行手册。跨语言同义主题与全球绝对热度不在本轮能力范围。
+华文覆盖目前仅有当今大马候选，主要社交平台或电商销量仍有缺口。GitHub 定时可能迟到、漏跑或因无活动停止。同一平台整体中断或 PAT 失效时，Telegram 告警可能无法安全提交。私库容量及 Git 历史删除的限制见运行手册。跨语言同义主题与全球绝对热度不在本轮能力范围。

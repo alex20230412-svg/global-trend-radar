@@ -2,6 +2,20 @@
 
 最后更新 2026-11-26 MYT，Claude。
 
+## 中文早报与阶段 C · 等待 Owner 确认并切换 `c-scheduled`（2026-11-26）
+
+- Owner 反馈第一份日报「完全看不懂」，D-011 改为在 Telegram 发中文早报（`radar/brief.py`）。
+  - **AI 版**：Gemini 免费层，先试 Flash，超时或出错就换 Flash-Lite。
+  - **兜底版**：中文栏目加原文标题。
+  - **代码负责、不交给模型的部分**：合并体育、去重、限制条数；地区名单只由代码按数据填写；没有真实条目编号的行一律丢弃。
+- 4 次真实预览暴露的问题都已修复：体育刷屏、同一事件重复、模型编造约 35 国的地区名单、Flash 超时后没有换备用模型（PR #20–#23）。最新预览为 AI 版、`gemini-flash-lite-latest`、brief-v2，24/24 来源正常。
+- 阶段 C 代码已合并（PR #18、#19）：
+  - 每小时 :17 采集，08:30 MYT 发早报，只在 `RADAR_STAGE=c-scheduled` 时运行；
+  - 首次计划采集自动记录开始时间；
+  - `keepalive.yml` 防 60 天停用；
+  - 每源新闻 30 条、相关报道 2 条，容量 700 MiB 预警、900 MiB 停止。
+- 下一步：Owner 确认早报看得懂后，把 `RADAR_STAGE` 改为 `c-scheduled`。新增费用 RM0。
+
 ## 阶段 B · 真实私库与 Telegram 实测通过（2026-11-26）
 
 - Owner 完成凭证设置（`radar-live` environment、两个 secret、`RADAR_STAGE=b-manual`、私库关闭 Actions）。

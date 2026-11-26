@@ -194,7 +194,7 @@ class BriefTests(unittest.TestCase):
         ]}
         writer = FakeWriter(json.dumps({"items": [
             {"id": "m1", "label": "甲艺人", "why": "享年六十五岁"},
-            {"id": "m2", "label": "这个标签有超过八个字", "why": "预计 65 号发布"},
+            {"id": "m2", "label": "这个标签明显超过了十二个字的上限", "why": "预计 65 号发布"},
             {"id": "m3", "label": "新电影", "why": "已有 18 场"},
             {"id": "m999", "label": "虚构项目", "why": "虚构事实"},
         ], "ideas": []}, ensure_ascii=False))
@@ -204,7 +204,7 @@ class BriefTests(unittest.TestCase):
         self.assertIn("甲艺人获提名", plain)
         self.assertIn("乙艺人", plain)
         self.assertIn("已有 18 场", plain)
-        for denied in ("六十五", "65", "超过八个字", "虚构项目"):
+        for denied in ("六十五", "65", "十二个字的上限", "虚构项目"):
             self.assertNotIn(denied, plain)
 
     def test_invented_number_in_reason_keeps_a_valid_label(self):
@@ -244,6 +244,22 @@ class BriefTests(unittest.TestCase):
         self.assertIn("Synthetic Pa 电子钱包", plain)
         self.assertIn("电子钱包", plain)
         self.assertIn("持续降雨警告（戒备）", plain)
+
+    def test_labels_up_to_twelve_characters_are_kept_and_main_pages_dropped(self):
+        snapshot = {"malaysia": [{"title": "hoki piala sultan azlan shah", "url": "https://example.org/h"}],
+                    "wiki": [{"title": "Hoofdpagina", "url": "https://nl.wikipedia.org/wiki/Hoofdpagina",
+                              "views_ceil": 172600},
+                             {"title": "A. Samad Said", "url": "https://en.wikipedia.org/wiki/A._Samad_Said",
+                              "views_ceil": 7400}]}
+        writer = FakeWriter(json.dumps({"items": [
+            {"id": "m1", "label": "大马曲棍球队晋级决赛", "why": "球队闯入决赛"},
+            {"id": "k1", "label": "A. Samad Said", "why": "作家条目"},
+        ], "ideas": []}, ensure_ascii=False))
+        plain = _message_text(build_brief(snapshot, NOW, "smoke-2026-11-27", writer).parts[0])
+        self.assertIn("大马曲棍球队晋级决赛 · 球队闯入决赛", plain)
+        self.assertNotIn("hoki piala", plain)
+        self.assertNotIn("Hoofdpagina", plain)
+        self.assertIn("A. Samad Said", plain)
 
     def test_cross_section_alias_urls_and_wiki_adult_filter(self):
         snapshot = {

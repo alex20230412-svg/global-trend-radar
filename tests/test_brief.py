@@ -97,7 +97,45 @@ class BriefTests(unittest.TestCase):
         self.assertEqual("m1", payload["malaysia"][0]["id"])
         self.assertIn("新加坡", payload["malaysia"][0]["also_searched_in"])
         self.assertNotIn("http", json.dumps(payload, ensure_ascii=False))
-        self.assertEqual(10, len(items["malaysia"]))
+        self.assertLessEqual(len(items["malaysia"]), 8)
+        self.assertLessEqual(len(items["other"]), 4)
+
+    def test_sports_merge_repeats_drop_and_caps_apply_before_the_model(self):
+        def entry(title, geos=("MY",), headline=None, category="其他"):
+            row = {"title": title, "geos": list(geos), "url": f"https://example.org/{len(title)}",
+                   "category": category}
+            if headline:
+                row["context"] = {"title": headline, "url": f"https://example.org/c/{len(title)}"}
+            return row
+
+        snapshot = {
+            "malaysia": [
+                entry("warriors vs kings", ("MY", "SG")), entry("duran duran", headline="Andy Taylor 1961–2026"),
+                entry("thunder vs timberwolves", ("MY", "GB")), entry("lrt"), entry("tariff"),
+                *[entry(f"topic {number}") for number in range(10)],
+            ],
+            "monitored_regions": [
+                entry("andy taylor duran duran", ("MY", "PH"), headline="Andy Taylor 1961–2026"),
+                entry("lamelo ball", ("AU",), category="体育"), entry("earthquake", ("AU",)),
+            ],
+            "weather": [
+                {"title": "THUNDERSTORMS WARNING", "valid_to": "2026-11-27T04:00:00+00:00"},
+                {"title": "THUNDERSTORMS WARNING", "valid_to": "2026-11-27T06:00:00+00:00"},
+            ],
+        }
+        items = collect_items(snapshot)
+        terms = [row["term"] for row in items["malaysia"]]
+        self.assertEqual(8, len(terms))
+        self.assertEqual(1, terms.count("体育赛事"))
+        sport = next(row for row in items["malaysia"] if row["term"] == "体育赛事")
+        self.assertEqual("warriors vs kings；thunder vs timberwolves", sport["headline"])
+        self.assertEqual(["新加坡", "英国"], sport["also_searched_in"])
+        others = [row["term"] for row in items["other"]]
+        self.assertNotIn("andy taylor duran duran", others)  # same headline as a Malaysian topic
+        self.assertEqual(["earthquake", "体育赛事"], others)
+        self.assertEqual([("THUNDERSTORMS WARNING", "11-27 14:00")],
+                         [(row["title"], row["until"]) for row in items["weather"]])
+        self.assertEqual([f"m{number}" for number in range(1, 9)], [row["id"] for row in items["malaysia"]])
 
     def test_sanitize_strips_links_markdown_and_controls(self):
         self.assertEqual("标题\n\n正文 。", sanitize("## **标题**\n\n\n\n正文 https://x.example/a 。\x07"))

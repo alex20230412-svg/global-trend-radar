@@ -223,6 +223,28 @@ class BriefTests(unittest.TestCase):
         self.assertIn("气象局发布雷暴预警，到", plain)
         self.assertNotIn("。，", plain)
 
+    def test_music_names_stay_original_apps_use_short_purpose_and_weather_in_chinese(self):
+        snapshot = {
+            "malaysia": [{"title": "合成话题", "url": "https://example.org/a"}],
+            "charts": {
+                "apple_music_my": [{"title": "Stop The Wedding!", "artist": "Synthetic Singer",
+                                    "url": "https://example.org/s"}],
+                "app_store_my": [{"title": "Synthetic Pay", "genre": "Finance", "url": "https://example.org/p"}],
+            },
+            "weather": [{"title": "CONTINUOUS RAIN WARNING (ALERT)", "url": "https://example.org/w"}],
+        }
+        writer = FakeWriter(json.dumps({"items": [
+            {"id": "m1", "label": "合成话题", "why": "合成原因"},
+            {"id": "s1", "label": "停止婚礼单曲", "why": "合成歌手的流行单曲"},
+            {"id": "a1", "label": "电子钱包", "why": "提供电子钱包与付款服务的应用"},
+        ], "ideas": []}, ensure_ascii=False))
+        plain = _message_text(build_brief(snapshot, NOW, "smoke-2026-11-27", writer).parts[0])
+        self.assertIn("Stop The Wedding! — Synth", plain)
+        self.assertNotIn("停止婚礼单曲", plain)
+        self.assertIn("Synthetic Pay", plain)
+        self.assertIn("电子钱包", plain)
+        self.assertIn("持续降雨警告（戒备）", plain)
+
     def test_cross_section_alias_urls_and_wiki_adult_filter(self):
         snapshot = {
             "malaysia": [{"title": "新电影", "url": "https://example.org/movie?utm_source=first"}],

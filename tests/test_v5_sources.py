@@ -61,6 +61,31 @@ class SourceAdapterTests(TestCase):
             origins={host: OriginGate() for host in HOSTS},
         )
 
+    def test_robots_redirect_to_www_is_followed_once_for_wikimedia(self):
+        for www_robots, expected in ((404, "ok"), (200, "robots_denied")):
+            requests = []
+
+            def fake(request, www_robots=www_robots):
+                requests.append((request.headers["Host"], request.url.path))
+                if request.headers["Host"] == "wikimedia.org" and request.url.path == "/robots.txt":
+                    return httpx.Response(302, headers={"Location": "https://www.wikimedia.org/robots.txt"})
+                if request.headers["Host"] == "www.wikimedia.org":
+                    return (httpx.Response(404) if www_robots == 404
+                            else httpx.Response(200, content=b"User-agent: *\nDisallow: /api/\n"))
+                return httpx.Response(200, content=b"{}")
+
+            http = self.transport(fake)
+            with self.subTest(www_robots=www_robots):
+                if expected == "ok":
+                    self.assertEqual(b"{}", http.load(WIKI.url + "/2026/11/25"))
+                else:
+                    with self.assertRaisesRegex(sources.SourceError, "^robots_denied$"):
+                        http.load(WIKI.url + "/2026/11/25")
+                self.assertEqual(("wikimedia.org", "/robots.txt"), requests[0])
+                self.assertEqual(("www.wikimedia.org", "/robots.txt"), requests[1])
+                with self.assertRaisesRegex(sources.SourceError, "^url_blocked$"):
+                    http.load("https://www.wikimedia.org/anything")
+
     def test_wikipedia_404_fallback_has_real_data_day_original_rank_and_views(self):
         urls = []
 

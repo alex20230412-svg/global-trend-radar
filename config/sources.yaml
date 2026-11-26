@@ -204,3 +204,24 @@ sources:
     url: "https://rss.marketingtools.apple.com/api/v2/my/apps/top-free/25/apps.json"
     enabled: true
     retention: long_term
+  - id: wikipedia_my
+    kind: wiki
+    geo: MY
+    language: und
+    url: "https://wikimedia.org/api/rest_v1/metrics/pageviews/top-per-country/MY/all-access"
+    enabled: true
+    retention: long_term
+  - id: weibo_archive
+    kind: china
+    geo: CN
+    language: zh
+    url: "https://api.github.com/repos/justjavac/weibo-trending-hot-search/contents/raw"
+    enabled: true
+    retention: long_term
+  - id: chinanews_rss
+    kind: china
+    geo: CN
+    language: zh
+    url: "https://www.chinanews.com.cn/rss/scroll-news.xml"
+    enabled: true
+    retention: long_term

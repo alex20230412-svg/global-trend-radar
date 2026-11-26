@@ -90,6 +90,10 @@ def synthetic_report():
         observe("app_store_my", "chart", title, rank=rank, genre=genre,
                 url=f"https://apps.apple.com/my/app/synthetic-{rank}")
 
+    observe("wikipedia_my", "wiki", "示例词条：青羽量角器", views_ceil=12000)
+    observe("weibo_archive", "china", "示例展览开放夜间预约", geo="CN")
+    observe("chinanews_rss", "china", "示例湿地开放候鸟观察步道", geo="CN")
+
     for rank, (title, hours) in enumerate((
         ("示例区域 A · 雷暴警告", 2),
         ("示例区域 B · 海岸大风警告", 6),

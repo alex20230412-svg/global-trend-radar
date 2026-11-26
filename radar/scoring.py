@@ -11,6 +11,7 @@ import re
 import unicodedata
 
 from rapidfuzz import fuzz
+from .sources import EXTRA_SOURCE_LABELS
 
 
 SCORING_PATH = Path(__file__).resolve().parents[1] / "config" / "scoring.yaml"
@@ -396,6 +397,8 @@ def rank_observations(rows, coverage, now, config, historical_coverage):
     )
     social = defaultdict(list)
     charts = defaultdict(list)
+    china = []
+    wiki = []
     for item in sorted(current, key=lambda item: (item.rank, item.source, item.key)):
         if item.row["kind"] in {"hn", "bluesky", "mastodon"}:
             social[item.source].append(_topic_entry(item, _first_seen([item]), config))
@@ -404,6 +407,15 @@ def rank_observations(rows, coverage, now, config, historical_coverage):
             charts[item.source].append(_topic_entry(
                 item, first, config, artist=item.row.get("artist"), genre=item.row.get("genre"),
                 new_entry=now - window <= first,
+            ))
+        elif item.row["kind"] == "china":
+            china.append(_topic_entry(
+                item, _first_seen([item]), config, source_label=EXTRA_SOURCE_LABELS[item.source],
+            ))
+        elif item.row["kind"] == "wiki":
+            wiki.append(_topic_entry(
+                item, _first_seen([item]), config, source_label=EXTRA_SOURCE_LABELS[item.source],
+                views_ceil=item.row["views_ceil"],
             ))
 
     weather = []
@@ -435,6 +447,8 @@ def rank_observations(rows, coverage, now, config, historical_coverage):
         "local_news": [_topic_entry(item, _first_seen([item]), config) for item in local_news[:config["local_news_limit"]]],
         "platforms": {source: items[:config["platform_limit"]] for source, items in sorted(social.items())},
         "charts": {source: items[:config.get("chart_limit", 10)] for source, items in sorted(charts.items())},
+        "china": china[:30],
+        "wiki": wiki[:30],
         "weather": weather[:config["weather_limit"]],
         "categories": categories,
     }

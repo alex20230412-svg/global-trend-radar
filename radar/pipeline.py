@@ -11,7 +11,7 @@ from .diagnostics import diagnostic
 from .history import previous_brief_keys
 from .report import build_report
 from .scoring import trend_key
-from .sources import SourceError, collect_source
+from .sources import HOURLY_SINGLE_READ_KINDS, SourceError, collect_source
 from .storage import WARN_KIB, StorageError, archive_rows, json_bytes, read_json, read_observations
 
 
@@ -26,6 +26,7 @@ SOURCE_ERROR_CODES = {
     "response_too_large", "invalid_xml", "feed_schema", "trend_schema", "malformed_item",
     "invalid_json", "json_schema", "source_deadline", "hn_item_schema", "mastodon_tag_link",
     "weather_schema", "source_disabled", "retention_approval_required", "timeout", "too_many_malformed_items",
+    "archive_stale", "archive_freshness_unavailable", "hourly_rate_guard", "source_config_invalid",
 }
 
 
@@ -70,7 +71,8 @@ def _collect_one(source, fetch, clock):
         if reason not in SOURCE_ERROR_CODES:
             status = failure["http_status"]
             reason = f"http_{status}" if status is not None else "source_unavailable"
-        return {"status": "error", "reason": reason, "count": 0, "skipped": skipped, "observed_at": None}, [], failure
+        status = "stale" if reason == "archive_stale" else "error"
+        return {"status": status, "reason": reason, "count": 0, "skipped": skipped, "observed_at": None}, [], failure
     observed_at = instant(clock()).isoformat()
     distinct = {}
     seen_urls = set()
@@ -88,10 +90,13 @@ def _collect_one(source, fetch, clock):
         distinct[identity] = {**item, "source_id": source.id, "kind": source.kind, "geo": source.geo,
                               "language": item.get("language", source.language), "observed_at": observed_at}
     status = "ok" if distinct else "empty"
-    return {
+    state = {
         "status": status, "observed_at": observed_at, "count": len(distinct),
         "skipped": getattr(items, "skipped", 0),
-    }, list(distinct.values()), None
+    }
+    if data_day := getattr(items, "data_day", None):
+        state.update(data_day=data_day, fallback=items.fallback)
+    return state, list(distinct.values()), None
 
 
 def _remember_first_seen(store, rows, files):
@@ -137,14 +142,26 @@ def collect_slot(store, sources, approved, start, execution, *, planned_at=None,
     else:
         prior_rows, states = [], {}
     pending = []
+    claim_key = f"runs/source-claims/{key}.json"
+    claims = set(read_json(store, claim_key) or ())
+    new_claims = set()
     for source in sources:
-        if states.get(source.id, {}).get("status") in GOOD:
+        prior_status = states.get(source.id, {}).get("status")
+        if prior_status in GOOD or (source.kind in HOURLY_SINGLE_READ_KINDS and prior_status in {"error", "stale"}):
             continue
         policy = source_policy(source, approved)
         if policy:
             states[source.id] = {"status": policy, "count": 0, "observed_at": None}
+        elif source.kind in HOURLY_SINGLE_READ_KINDS and source.id in claims:
+            # A prior process could have stopped after starting the request and before its commit.
+            states[source.id] = {"status": "error", "reason": "hourly_rate_guard",
+                                 "count": 0, "observed_at": None}
         else:
             pending.append(source)
+            if source.kind in HOURLY_SINGLE_READ_KINDS:
+                new_claims.add(source.id)
+    if new_claims:
+        store.publish({claim_key: json_bytes(sorted(claims | new_claims))}, "Reserve hourly source requests")
     rows, diagnostics = [], []
     with ThreadPoolExecutor(max_workers=5) as pool:
         futures = {source.id: pool.submit(_collect_one, source, fetch, clock) for source in pending}
@@ -258,12 +275,17 @@ def _coverage(timeline, sources, approved, now):
              if (result := manifest["sources"].get(source.id, {})).get("status") in GOOD),
             default=None,
         )
-        coverage.append({
+        status = policy or current.get("status", "not_run")
+        reason = current.get("reason")
+        item = {
             "source_id": source.id, "kind": source.kind, "geo": source.geo,
-            "status": policy or current.get("status", "not_run"),
-            "reason": current.get("reason"),
+            "status": status,
+            "reason": reason,
             "observed_at": current.get("observed_at"), "last_success_at": last_success,
-        })
+        }
+        if "data_day" in current:
+            item.update(data_day=current["data_day"], fallback=current["fallback"])
+        coverage.append(item)
     return coverage
 
 

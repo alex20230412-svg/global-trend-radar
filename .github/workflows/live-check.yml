@@ -36,4 +36,5 @@ jobs:
       - name: Run credential-free source and digest checks
         env:
           RADAR_PROBE_GDELT: ${{ inputs.probe_gdelt }}
+          RUN_METADATA_TOKEN: ${{ github.token }}
         run: python -m radar.livecheck

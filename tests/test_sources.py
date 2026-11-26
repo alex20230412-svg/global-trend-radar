@@ -399,9 +399,28 @@ class HttpTests(unittest.TestCase):
                         interval = case["minimum_interval"]
                         self.assertGreaterEqual(starts[1][1] - starts[0][1], interval)
                         self.assertGreaterEqual(starts[2][1] - starts[1][1], interval)
+                    for url in case.get("allowed_urls", ()):
+                        self.assertTrue(robots.can_fetch(url, USER_AGENT), url)
+                    denied = case.get("denied", {})
+                    for url in denied.get("urls", ()):
+                        self.assertFalse(robots.can_fetch(url, USER_AGENT), url)
+                    for agent in denied.get("agents", ()):
+                        # Named crawler groups parse as separate groups; ours falls back to "*".
+                        self.assertFalse(robots.can_fetch(source.url, agent), agent)
                     if source.id == "hn":
                         self.assertTrue(robots.can_fetch(f"https://{host}/v0/item/123.json", USER_AGENT))
                         self.assertFalse(robots.can_fetch(f"https://{host}/v0/item/123.jsonx", USER_AGENT))
+
+    def test_review_robots_fixture_holds_captured_origin_text(self):
+        path = Path(__file__).with_name("fixtures") / "review_robots.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual("2026-11-26", document["captured"])
+        cases = document["cases"]
+        self.assertIn("Disallow: /trends/explore?", cases["trends.google.com"]["body"])
+        self.assertIn("Allow: /*.json?*$", cases["hacker-news.firebaseio.com"]["body"])
+        self.assertIn("Crawl-delay: 1", cases["www.bernama.com"]["body"])
+        self.assertIn("User-agent: Scrapy", cases["mastodon.social"]["body"])
+        self.assertEqual(404, cases["api.data.gov.my"]["robots_status"])
 
     def test_retry_after_and_never_follow_redirects(self):
         requests = []

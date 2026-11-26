@@ -1,48 +1,92 @@
 {
   "review": "https://github.com/alex20230412-svg/global-trend-radar/pull/7#issuecomment-7168526931",
-  "provenance": "The reviewer reported target allowance for all nine hosts and quoted the HN path rules, two crawl-delay values, and MET's 404. This file models those facts for MockTransport. It contains no downloaded robots.txt bodies. Mock User-agent groups and additional Allow lines are not verbatim origin content.",
+  "captured": "2026-11-26",
+  "provenance": "Bodies are the robots.txt files Claude read from each origin on 2026-11-26 through a cloud browser (PR #7 comment 7179991488). Whitespace was normalised to one directive per line with a blank line between groups; directives and their order are unchanged. api.data.gov.my returned HTTP 404.",
   "cases": {
     "trends.google.com": {
       "source_id": "trends_my",
       "robots_status": 200,
-      "body": "User-agent: *\nAllow: /trending/rss\n"
+      "body": "# trends.google.com/robots.txt\nUser-agent: *\nDisallow: /explore?\nDisallow: /trends/explore?\n",
+      "denied": {
+        "urls": [
+          "https://trends.google.com/trends/explore?geo=MY&q=example"
+        ]
+      },
+      "allowed_urls": [
+        "https://trends.google.com/trending/rss?geo=SG",
+        "https://trends.google.com/trending/rss?geo=US"
+      ]
     },
     "www.malaysiakini.com": {
       "source_id": "malaysiakini",
       "robots_status": 200,
-      "body": "User-agent: *\nAllow: /rss/en/news.rss\nCrawl-delay: 1\n",
-      "minimum_interval": 1
+      "body": "# Robots.txt for Malaysia Kini\n# Allows search engine crawlers to efficiently index content\n# Teads Ads.txt crawler\nUser-agent: AdsTxtCrawler\nAllow: /ads.txt\n\nUser-agent: adstxt\nAllow: /ads.txt\n\n# Default rules for all user-agents\nUser-agent: *\nAllow: /\n\n# Block crawlers from API endpoints (internal only)\nDisallow: /api/\n\n# Block auth-related pages\nDisallow: /auth/\nDisallow: /logout\nDisallow: /email-link/\n\n# Block promo and other non-indexable paths\nDisallow: /promo/\n\n# Block localized search pages\nDisallow: /en/search\nDisallow: /my/search\nDisallow: /zh/search\nDisallow: /en/search?*\nDisallow: /my/search?*\nDisallow: /zh/search?*\n\n# Allow search engines to crawl important static resources\nAllow: /assets/\nAllow: /favicon.ico\nAllow: /favicon.svg\nAllow: /ads.txt\n\n# Set crawl delay for efficient crawling (optional, in seconds)\nCrawl-delay: 1\n\n# Sitemaps for all supported languages\nSitemap: https://www.malaysiakini.com/en/sitemap_index.xml\nSitemap: https://www.malaysiakini.com/my/sitemap_index.xml\nSitemap: https://www.malaysiakini.com/zh/sitemap_index.xml\n\n# Specific rules for known aggressive crawlers (optional)\nUser-agent: AhrefsBot\nCrawl-delay: 10\n\nUser-agent: SemrushBot\nCrawl-delay: 10\n",
+      "minimum_interval": 1,
+      "denied": {
+        "urls": [
+          "https://www.malaysiakini.com/api/news"
+        ]
+      }
     },
     "www.malaymail.com": {
       "source_id": "malay_mail",
       "robots_status": 200,
-      "body": "User-agent: *\nAllow: /feed/rss/malaysia\n"
+      "body": "User-agent: *\nDisallow: /ajax/*\nDisallow: /print*\nDisallow: /getRelatedArticles*\nDisallow: /getMostReadArticles*\nDisallow: /article_count/*\nDisallow: /get-menu-header*\nDisallow: /search*\nDisallow: /morearticles/*\nDisallow: /article.php*\nDisallow: /login-mgt\nDisallow: /*.php\nDisallow: /archive/*\nDisallow: /widget/*\nDisallow: */page/*\nDisallow: /test/\nDisallow: /test*\n\nUser-agent: grapeshot\nDisallow:\nSitemap: https://www.malaymail.com/sitemap.xml\n",
+      "denied": {
+        "urls": [
+          "https://www.malaymail.com/search?q=example"
+        ]
+      }
     },
     "cms.freemalaysiatoday.com": {
       "source_id": "fmt",
       "robots_status": 200,
-      "body": "User-agent: *\nAllow: /feed\n"
+      "body": "User-agent: *\nAllow: /\nAllow: /_next/static/\nAllow: /_next/image/\nAllow: /_next/data/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /*/edit/\nDisallow: /*/edit$\nDisallow: /api/\nDisallow: /video-admin/\nDisallow: /api/video-admin/\nDisallow: /api/revalidate\nDisallow: /api/websub-callback\nDisallow: /api/internal/\nDisallow: /search?q=$\nDisallow: /search?q=&\n\nUser-agent: ChatGPT-User\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: GPTBot\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: Claude-Web\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: ClaudeBot\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: anthropic-ai\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: Google-Extended\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: GoogleOther\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: CCBot\nDisallow: /\n\nUser-agent: PerplexityBot\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: FacebookBot\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\nCrawl-delay: 1\n\nUser-agent: Applebot\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: Applebot-Extended\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: Amazonbot\nDisallow: /\n\nUser-agent: cohere-ai\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: Diffbot\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: Bytespider\nDisallow: /\n\nUser-agent: YouBot\nAllow: /\nAllow: /_next/\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: Googlebot\nAllow: /\nAllow: /_next/\nAllow: /*.js\nAllow: /*.css\nAllow: /*.json\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /*/edit/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: Googlebot-News\nAllow: /\nAllow: /_next/\nAllow: /*.js\nAllow: /*.css\nAllow: /videos/\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /*/edit/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: Googlebot-Video\nAllow: /videos/\nAllow: /api/videos/\nDisallow: /wp-admin/\nDisallow: /api/video-admin/\n\nUser-agent: Googlebot-Image\nAllow: /\nAllow: /_next/\nDisallow: /wp-admin/\nDisallow: /video-admin/\n\nUser-agent: FeedFetcher-Google\nAllow: /\n\nUser-agent: GoogleProducer\nAllow: /\n\nUser-agent: Google-Read-Aloud\nAllow: /\n\nUser-agent: AdsBot-Google\nAllow: /\n\nUser-agent: AdsBot-Google-Mobile\nAllow: /\n\nUser-agent: Mediapartners-Google\nAllow: /\n\nUser-agent: Storebot-Google\nAllow: /\n\nUser-agent: Bingbot\nAllow: /videos/\nAllow: /\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\nCrawl-delay: 1\n\nUser-agent: BingPreview\nAllow: /\nDisallow: /wp-admin/\nDisallow: /video-admin/\nCrawl-delay: 1\n\nUser-agent: msnbot\nAllow: /\nDisallow: /wp-admin/\nDisallow: /video-admin/\nCrawl-delay: 1\n\nUser-agent: msnbot-media\nAllow: /\nDisallow: /wp-admin/\nDisallow: /video-admin/\nCrawl-delay: 1\n\nUser-agent: Slurp\nAllow: /\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\nCrawl-delay: 1\n\nUser-agent: DuckDuckBot\nAllow: /\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\n\nUser-agent: Yandex\nAllow: /\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\nCrawl-delay: 1\n\nUser-agent: Baiduspider\nAllow: /\nDisallow: /wp-admin/\nDisallow: /wp-includes/\nDisallow: /api/\nDisallow: /video-admin/\nCrawl-delay: 1\n\n# Ahrefs\nUser-agent: AhrefsBot\nDisallow: /\n\n# Semrush\nUser-agent: SemrushBot\nDisallow: /\n\n# Moz\nUser-agent: DotBot\nDisallow: /\n\n# Majestic\nUser-agent: MJ12bot\nDisallow: /\nSitemap: https://cms.freemalaysiatoday.com/sitemap-news.xml\nSitemap: https://cms.freemalaysiatoday.com/sitemap.xml\nSitemap: https://www.freemalaysiatoday.com/sitemaps-index.xml\nSitemap: https://www.freemalaysiatoday.com/news-sitemap.xml\nSitemap: https://www.freemalaysiatoday.com/landing-page-sitemap.xml\nSitemap: https://www.freemalaysiatoday.com/video-sitemap.xml\nSitemap: https://www.freemalaysiatoday.com/feeds-sitemap.xml\n",
+      "denied": {
+        "agents": [
+          "CCBot"
+        ]
+      }
     },
     "www.bernama.com": {
       "source_id": "bernama",
       "robots_status": 200,
-      "body": "User-agent: *\nAllow: /en/rssfeed.php\nCrawl-delay: 1\n",
-      "minimum_interval": 1
+      "body": "# 1. Benarkan Google & Enjin Carian Utama (Sekat folder misc & lite sahaja)\nUser-agent: *\nDisallow: /misc/\nDisallow: /lite/\nCrawl-delay: 1\n\n# 2. Halang Bot AI / Scraper Agresif (Ringankan Beban Server)\nUser-agent: GPTBot\nDisallow: /\n\nUser-agent: ChatGPT-User\nDisallow: /\n\nUser-agent: CCBot\nDisallow: /\n\nUser-agent: Anthropic-ai\nDisallow: /\n\nUser-agent: Bytespider\nDisallow: /\n\nUser-agent: ClaudeBot\nDisallow: /\n\nUser-agent: Diffbot\nDisallow: /\n\n# 3. Pautan Sitemap Utama & Google News\nSitemap: https://www.bernama.com/sitemap.xml\nSitemap: https://www.bernama.com/news-sitemap.xml\n",
+      "minimum_interval": 1,
+      "denied": {
+        "agents": [
+          "ClaudeBot",
+          "GPTBot"
+        ]
+      }
     },
     "hacker-news.firebaseio.com": {
       "source_id": "hn",
       "robots_status": 200,
-      "body": "User-agent: *\nAllow: /*.json$\nDisallow: /\n"
+      "body": "User-agent: *\nAllow: /*.json$\nAllow: /*.json?*$\nDisallow: /\n",
+      "allowed_urls": [
+        "https://hacker-news.firebaseio.com/v0/item/123.json",
+        "https://hacker-news.firebaseio.com/v0/topstories.json?print=pretty"
+      ]
     },
     "public.api.bsky.app": {
       "source_id": "bluesky",
       "robots_status": 200,
-      "body": "User-agent: *\nAllow: /xrpc/app.bsky.unspecced.getTrendingTopics\n"
+      "body": "# Hello Friends!\n# Crawling the public parts of the API is allowed. HTTP 429 (\"backoff\") status codes are used for rate-limiting. Up to a handful concurrent requests should be ok.\nUser-agent: *\nAllow: /\n"
     },
     "mastodon.social": {
       "source_id": "mastodon_tags",
       "robots_status": 200,
-      "body": "User-agent: *\nAllow: /api/v1/trends/tags\nAllow: /api/v1/trends/links\n"
+      "body": "# You are not allowed to use the contents of this website for LLM training\nUser-agent: AI2Bot\nUser-agent: Ai2Bot-Dolma\nUser-agent: anthropic-ai\nUser-agent: Applebot-Extended\nUser-agent: Bytespider\nUser-agent: CCBot\nUser-agent: ClaudeBot\nUser-agent: cohere-ai\nUser-agent: cohere-training-data-crawler\nUser-agent: Diffbot\nUser-agent: FacebookBot\nUser-agent: Google-CloudVertexBot\nUser-agent: Google-Extended\nUser-agent: GPTBot\nUser-agent: ImagesiftBot\nUser-agent: LinerBot\nUser-agent: Meta-ExternalAgent\nUser-agent: omgilibot\nUser-agent: PanguBot\nUser-agent: Scrapy\nUser-agent: Webzio-Extended\nDisallow: /\n\nUser-agent: *\nDisallow: /media_proxy/\nDisallow: /interact/\nDisallow: /api/v1/instance/domain_blocks\n",
+      "denied": {
+        "agents": [
+          "ClaudeBot",
+          "GPTBot"
+        ]
+      },
+      "allowed_urls": [
+        "https://mastodon.social/api/v1/trends/links?limit=10"
+      ]
     },
     "api.data.gov.my": {
       "source_id": "weather",

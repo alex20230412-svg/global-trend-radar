@@ -6,7 +6,7 @@
 
 阶段 A 的 PR #7 依赖 PR #5。PR #5 由 Owner 决定是否合并。合并后，将阶段 A 提交整理到新的 `main`，将 PR #7 的目标改为 `main` 并复核差异。阶段 B 获批及代码由 Owner 合并后，真实工作流才可以接受设置。
 
-来源审批以审核后的 `config/sources.yaml` 为准。Owner 确认一批来源及其保存权后，只将对应条目的 `retention` 从 `pending` 改为 `long_term` 并提交审核。执行时默认选用所有 `enabled: true`、`retention: long_term` 的条目。`RADAR_APPROVED_SOURCES` 留空即可，有需要时填写空格分隔的 ID 缩小范围。当前只有天气符合条件，MY 榜和全球核心榜的验收需要先确认核心来源。临时展示 Trends 相关新闻的标题和媒体名仍需单独批准，生产日报尚未接入。 [来源证据表](sources.md)
+来源审批以审核后的 `config/sources.yaml` 为准。Owner 确认一批来源及其保存权后，只将对应条目的 `retention` 从 `pending` 改为 `long_term` 并提交审核。执行时默认选用所有 `enabled: true`、`retention: long_term` 的条目。`RADAR_APPROVED_SOURCES` 留空即可，有需要时填写空格分隔的 ID 缩小范围。当前只有天气符合条件，MY 榜和全球核心榜的验收需要先确认核心来源。日报里的「为什么热」（每个热词附第一条相关报道的标题和媒体名）由 Trends 条目的 `retain_related` 开关控制：Owner 批准后把对应条目改为 `true`，相关报道标题、链接和媒体名随观测存入私库，日报即自动显示；未批准时日报不显示，也不保存。 [来源证据表](sources.md)
 
 ## 阶段 B 浏览器和手机设置
 
@@ -25,11 +25,19 @@
 
 ## 阶段 B 首次手动运行
 
-1. 在 [Radar collect](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/collect.yml) 选择 **Run workflow → main**。核对 8 分钟以内结束，公共日志只出现安全汇总，私库存在当小时 `observations`、`manifests` 和独立的 `runs`。小时为 UTC，观测另存实际时间。检查已批准核心来源返回了有效、新鲜的记录。
-2. 同一 UTC 小时再触发一次。对比小时分区记录数及校验和，成功来源应跳过，若只部分失败则只补该失败来源。相邻小时再采集，若真实热点重复，检查两个分区都有独立的 `observed_at`、来源、地区、原始量级与排名。没有自然出现重合时继续等真实样本。按批准窗口同时派发两条手动 Collection 检查共享队列、无抢写，与禁用私库 Actions 的设置一起核对。
-3. 至少取得两个不同槽的真实数据后，在 [Radar report](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/report.yml) 选择 `main`、`action=send`。核对收到 `smoke-YYYY-MM-DD`、中文栏目和 MYT、原始链接、覆盖/缺失及数据截止。真实报告刚好只有一段时，分段边界由离线用例验证。再次执行同一 MYT 日期的 `send`，证实投递流水和私聊没有重复发送。
-4. 检查私库投递流水逐段有 payload 哈希、状态、尝试、时间和 API 回执 ID。成功时每段应为 `SENT`。若自然出现 `RATE_LIMITED`，等私库的 `retry_at` 后使用 `resume`。若出现 `UNKNOWN` 或 `SENDING`，按下节核对。失败补齐、429 和送达歧义的故障注入使用离线 Mock，真实验收只记录自然出现的异常。
-5. 记录经实际 Actions 验证的来源覆盖、持续时间、并发、日志检查、标准 runner 和 RM0 证据。公开文档仅记录汇总，真实数据及回执留在私库。来源符合 L4 时才升级证据等级。
+Owner 只负责点按钮和看 Telegram，数据核对由 AI 完成。每一步做完，在对话里告诉 AI「做完第 N 步」即可。
+
+| 步骤 | Owner 做 | AI 核对 |
+| --- | --- | --- |
+| 1 | 在 [Radar collect](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/collect.yml) 点 **Run workflow → main**，等它变成绿色或红色。 | 读公开日志，只应出现 `collect outcome=…` 这类结果码；8 分钟内结束。 |
+| 2 | 同一小时内再点一次 collect。 | 私库当小时 `observations`、`manifests`、`runs` 存在且校验和一致；第二次只补失败来源，成功来源跳过。 |
+| 3 | 隔一小时以上再点一次 collect。 | 相邻两个小时分区各有独立 `observed_at`、地区、量级与排名；真实来源返回新鲜数据。 |
+| 4 | 在 [Radar report](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/report.yml) 选 `action=send` 点 Run，然后看 Telegram 私聊有没有收到 `smoke-日期` 日报、收到几段。 | 私库投递流水逐段为 `SENT`，有 payload 哈希、尝试次数和 Telegram 回执 ID；日报中文、MYT 时间、链接和来源状态正确。 |
+| 5 | 同一天再点一次 report `send`，确认 Telegram **没有**收到第二份。 | 投递流水未新增发送；记录持续时间、并发、日志、标准 runner 与 RM0 证据，来源符合条件时再升级证据等级。 |
+
+AI 核对私库需要只读权限：Owner 在 AI 会话里临时把 `global-trend-radar-data` 加入（例如 Claude 的 add_repo，或 Codex 的仓库连接），核对完成后移除。AI 不向私库写入，也不把私库内容贴到公开仓库，只在公开文档记录汇总。
+
+若出现 `RATE_LIMITED`，等私库 `retry_at` 后用 `resume`。若出现 `UNKNOWN` 或 `SENDING`，按下方「暂停、恢复和清理」核对。失败补齐、429 和送达歧义的故障注入只用离线 Mock，真实验收只记录自然出现的异常。
 
 ## 阶段 C 启用与验收
 

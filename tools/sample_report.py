@@ -45,7 +45,13 @@ def synthetic_report():
         })
 
     for rank, (title, volume, *regions) in enumerate(TOPICS, 1):
-        observe("trends_my", "trends", title, rank=rank, volume=volume)
+        # Retained Trends article metadata only exists once the Owner approves retain_related.
+        related = [{
+            "title": f"合成报道：{title}引发讨论",
+            "url": f"https://example.org/synthetic/context/{rank}",
+            "publisher": "示例媒体",
+        }] if rank <= 3 else []
+        observe("trends_my", "trends", title, rank=rank, volume=volume, related=related)
         if rank <= 5:
             observe("trends_my", "trends", title, rank=rank, at=PREVIOUS, volume="200+")
         for region in regions:

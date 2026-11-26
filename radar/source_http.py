@@ -1,5 +1,6 @@
 """Bounded, credential-free HTTP for approved source endpoints."""
 
+import re
 import ipaddress
 import socket
 import time
@@ -19,6 +20,7 @@ MIN_INTERVAL = 0.5
 GDELT_HOST = "api.gdeltproject.org"
 ORIGIN_MIN_INTERVALS = {GDELT_HOST: 5.0}
 ORIGIN_READ_TIMEOUTS = {GDELT_HOST: 20.0}
+DETAIL = re.compile(r"[A-Z][A-Za-z0-9_]{0,39}(?::[0-9]{1,7}:[0-9]{1,7})?")
 HOSTS = frozenset({
     "trends.google.com",
     "www.malaysiakini.com",
@@ -36,12 +38,14 @@ HOSTS = frozenset({
 class SourceError(Exception):
     """An error that can be recorded without disclosing upstream text."""
 
-    def __init__(self, code, retry_after=None, *, http_status=None, skipped=0):
+    def __init__(self, code, retry_after=None, *, http_status=None, skipped=0, detail=None):
         super().__init__(code)
         self.code = code
         self.retry_after = retry_after
         self.http_status = http_status if type(http_status) is int and 100 <= http_status <= 599 else None
         self.skipped = skipped
+        # Only an exception class name and an optional line:column position, never upstream text.
+        self.detail = detail if isinstance(detail, str) and DETAIL.fullmatch(detail) else None
 
 
 @dataclass
@@ -204,5 +208,5 @@ class SourceHttp:
                         raise SourceError("response_too_large")
                     body.extend(chunk)
                 return bytes(body)
-        except httpx.HTTPError:
-            raise SourceError("network_error") from None
+        except httpx.HTTPError as error:
+            raise SourceError("network_error", detail=type(error).__name__) from None

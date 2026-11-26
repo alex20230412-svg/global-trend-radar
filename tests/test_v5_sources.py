@@ -266,3 +266,42 @@ class SourceHistoryTests(TestCase):
         self.assertEqual(calls, [WEIBO.id])
         self.assertIn("source=weibo_archive status=stale count=0 skipped=0 http=200 newest_age_min=- reason=archive_stale",
                       summary)
+
+
+class BaiduHotTests(TestCase):
+    source = SOURCE["baidu_hot"]
+
+    @staticmethod
+    def board(items, *, nested=True, success=True):
+        content = [{"content": items}] if nested else items
+        return json.dumps({"success": success, "data": {"cards": [{"content": content}]}}).encode()
+
+    def test_nested_and_flat_boards_skip_pinned_and_build_links(self):
+        items = [
+            {"isTop": True, "word": "置顶示例"},
+            {"index": 1, "word": "合成话题甲", "url": "https://example.org/not-used"},
+            {"index": 2, "word": "合成话题 乙&"},
+        ]
+        for nested in (True, False):
+            with self.subTest(nested=nested):
+                rows = sources._baidu_hot(self.source, self.board(items, nested=nested))
+                self.assertEqual(["合成话题甲", "合成话题 乙&"], [row["title"] for row in rows])
+                self.assertEqual([1, 2], [row["rank"] for row in rows])
+                self.assertTrue(all(row["url"].startswith("https://m.baidu.com/s?word=") for row in rows))
+                self.assertNotIn("example.org", " ".join(row["url"] for row in rows))
+
+    def test_schema_errors_and_malformed_items(self):
+        with self.assertRaises(sources.SourceError):
+            sources._baidu_hot(self.source, self.board([{"index": 1, "word": "合成"}], success=False))
+        with self.assertRaises(sources.SourceError):
+            sources._baidu_hot(self.source, b'{"success": true, "data": {"cards": []}}')
+        rows = sources._baidu_hot(self.source, self.board([
+            {"index": 1, "word": "合成话题"}, {"index": 2, "word": ""}, {"index": 3, "word": "合成话题丙"},
+        ]))
+        self.assertEqual(1, rows.skipped)
+        with self.assertRaises(sources.SourceError):
+            sources._baidu_hot(self.source, self.board([{"word": ""}, {"word": None}, {"word": "合成"}]))
+
+    def test_only_the_board_host_is_allowed(self):
+        self.assertIn("top.baidu.com", HOSTS)
+        self.assertEqual(("china", sources.BAIDU_HOT_URL), sources.SITE_ENDPOINTS["baidu_hot"])

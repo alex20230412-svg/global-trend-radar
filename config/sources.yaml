@@ -225,3 +225,10 @@ sources:
     url: "https://www.chinanews.com.cn/rss/scroll-news.xml"
     enabled: true
     retention: long_term
+  - id: baidu_hot
+    kind: china
+    geo: CN
+    language: zh
+    url: "https://top.baidu.com/api/board?platform=wise&tab=realtime"
+    enabled: true
+    retention: long_term

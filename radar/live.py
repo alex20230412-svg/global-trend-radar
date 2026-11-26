@@ -12,7 +12,7 @@ from .delivery import DeliveryError, TelegramClient, reconcile_delivery, send_pa
 from .diagnostics import diagnostic
 from .expiry import token_expiry_notice
 from .pipeline import (
-    MYT, collect_slot, deliver, delivery_callbacks, hour, instant, prepare_report,
+    MYT, china_parts, collect_slot, deliver, delivery_callbacks, hour, instant, prepare_report,
     utc_now,
 )
 from .sources import load_sources
@@ -223,6 +223,26 @@ def _send_youtube_supplement(store, execution, report_id, main_status, telegram,
             pass
 
 
+def _send_china_message(store, report_id, main_status, telegram):
+    """The separate, silent China message (Owner 2026-11-27). Never changes the main result."""
+    code, sent = "ok", "NOT_SENT"
+    try:
+        if main_status not in DELIVERED:
+            code = "main_not_sent"
+        elif not (parts := china_parts(store, report_id)):
+            code = "empty"
+        else:
+            sent = "UNKNOWN"
+            # Same ledger as the main brief, so a rerun skips parts already delivered.
+            sent = send_parts(f"{report_id}-china", parts, telegram, *delivery_callbacks(store),
+                              retry_rate_limit=False, silent=True)
+    except PublicationError:
+        code = "publication_failed"
+    except Exception as error:
+        code = f"error_{type(error).__name__}"[:48]
+    print(f"china status={code} sent={sent}")
+
+
 def _token_notice(env, now):
     status, notice = token_expiry_notice(env.get("DATA_REPO_TOKEN", ""), now)
     if status != "no_token":
@@ -309,6 +329,7 @@ def _report(store, sources, approved, env, execution, created, now, schedule_fro
            ended_at=utc_now().isoformat(), parts=len(parts))
     print(f"report delivery={status} parts={len(parts)}")
     if not report_id.startswith(("alert-", "weekly-")):
+        _send_china_message(store, report_id, status, telegram)
         _send_youtube_supplement(store, execution, report_id, status, telegram, env.get("YOUTUBE_API_KEY", ""))
     return int(status not in DELIVERED)
 

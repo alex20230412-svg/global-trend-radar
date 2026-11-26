@@ -43,13 +43,15 @@ SOURCE_NAMES = {
     "fmt": "Free Malaysia Today", "bernama": "马新社", "hn": "Hacker News", "bluesky": "Bluesky",
     "mastodon_tags": "Mastodon 标签", "mastodon_links": "Mastodon 链接", "weather": "大马气象局",
     "gdelt": "GDELT", "apple_music_my": "Apple Music 榜", "app_store_my": "App Store 榜",
+    "apple_music_cn": "Apple Music 中国榜", "app_store_cn": "App Store 中国榜",
+    "baidu_teleplay": "百度电视剧榜", "baidu_movie": "百度电影榜", "baidu_novel": "百度小说榜",
     "wikipedia_my": "马来西亚维基百科", "weibo_archive": "微博存档", "chinanews_rss": "中新网", "baidu_hot": "百度热搜",
 }
 SYSTEM_PROMPT = """你为马来西亚华人编辑中文热点早报。只返回 JSON 对象 items 和 ideas。
 items 的每行包含原样 id、label、why。label 是 8 个中文字以内的主题（例如「曲棍球队晋级」「公寓发生火灾」，太长会被截断），why 是一句简体中文原因。
 优先保留马来西亚热搜，依照输入顺序。中国热议从候选选至多 8 条，维基从前 30 条选至多 5 条，排除色情或成人内容。
 malaysia、other、china 的 label 必须是中文，概括发生了什么事；即使搜索词是英文、马来文或人名也要这样写，例如搜索词是人名时，写成「前部长撤回诉讼」「乐队吉他手逝世」这类事件描述，而不是照抄名字。可以用通行的中文译名，不要自创音译。
-wiki 的 label 可以保留条目原名。歌曲名由程序显示原文。App 的 label 写 2 到 5 个字的用途（例如 网购、电子钱包、直播带货），why 用一句话说明用途。不要重复同一人物、事件或作品。
+wiki 的 label 可以保留条目原名。歌曲名由程序显示原文。App（apps 和 cn_apps）的 label 写 2 到 5 个字的用途（例如 网购、电子钱包、直播带货），why 用一句话说明用途。不要重复同一人物、事件或作品。
 只能依据输入的标题和上下文，不得加入条目里没有的事实。禁止编造数字、年龄、日期、人名。不知道原因就写「原因不明」。
 不用写栏目、地区名单、搜索量、排名、链接或 Markdown，程序会补上。
 ideas 最多 3 条，每条写成一个可以尝试的生意或服务：卖什么、做什么、给谁，并说明依据。不能只复述新闻或天气。
@@ -80,6 +82,7 @@ class Brief:
     parts: list[str]
     meta: dict = field(default_factory=dict)
     entries: list[dict] = field(default_factory=list)
+    china_parts: list[str] = field(default_factory=list)
 
 
 def _clean(value, limit=200):
@@ -119,6 +122,7 @@ NUMBERS = re.compile(
 LIMITS = {
     "malaysia": 8, "other": 4, "china": 8, "wiki": 5, "music": 5, "apps": 5,
     "news": 3, "weather": 3,
+    "cn_tv": 5, "cn_movie": 3, "cn_novel": 3, "cn_music": 5, "cn_apps": 5,
 }
 HEADINGS = {
     "malaysia": "🔥 马来西亚热搜",
@@ -128,6 +132,23 @@ HEADINGS = {
     "music": "🎵 大家在听",
     "apps": "📱 大家在下载",
 }
+# Owner 2026-11-27: China goes in a separate message, with what is popular there, not only news.
+MAIN_SECTIONS = ("malaysia", "other", "wiki", "music", "apps")
+CHINA_HEADINGS = {
+    "china": "🔥 中国热议",
+    "cn_tv": "📺 热门电视剧",
+    "cn_movie": "🎬 热门电影",
+    "cn_novel": "📚 热门小说",
+    "cn_music": "🎵 中国热门歌曲",
+    "cn_apps": "📱 中国热门 App",
+}
+CN_CHARTS = (
+    ("cn_tv", "baidu_teleplay", "t"), ("cn_movie", "baidu_movie", "f"), ("cn_novel", "baidu_novel", "b"),
+    ("cn_music", "apple_music_cn", "q"), ("cn_apps", "app_store_cn", "p"),
+)
+# Titles and descriptions there are already Chinese; only the apps need an AI purpose label.
+NO_AI_SECTIONS = {"cn_tv", "cn_movie", "cn_novel", "cn_music"}
+HOT_INDEX_SECTIONS = {"cn_tv", "cn_movie", "cn_novel"}
 ARCHIVE_SECTIONS = {"other": "global"}
 SHORT_LABELS = {"中新网": "中新"}
 # Up to 12 characters; the table cuts anything past its width, the details show it in full.
@@ -260,6 +281,17 @@ def collect_items(snapshot):
         items[section] = _numbered(_select_unique(
             (row for row in entries if row["title"]), LIMITS[section], seen,
         ), prefix)
+    china_seen = set()
+    for section, source_id, prefix in CN_CHARTS:
+        entries = ({
+            "title": _clean(entry.get("title"), 100), "artist": _clean(entry.get("artist"), 60),
+            "genre": _clean(entry.get("genre"), 30), "volume": _clean(entry.get("volume_raw"), 12),
+            "link": clean_url(entry.get("url")),
+            "key": entry_key(entry.get("title"), entry.get("url"), section=section, artist=entry.get("artist")),
+        } for entry in charts.get(source_id, []))
+        items[section] = _numbered(_select_unique(
+            (row for row in entries if row["title"]), LIMITS[section], china_seen,
+        ), prefix)
     news = ({
         "title": _clean(entry.get("title"), 160),
         "publisher": PUBLISHERS.get(entry.get("source_id"), _clean(entry.get("publisher"), 40)),
@@ -281,6 +313,8 @@ def collect_items(snapshot):
 def _prompt_payload(items, now):
     payload = {"date": _date(now)}
     for section, rows in items.items():
+        if section in NO_AI_SECTIONS:
+            continue
         payload[section] = [{key: value for key, value in row.items()
                              if key not in HIDDEN_KEYS and value not in (None, "", [])}
                             for row in rows]
@@ -390,9 +424,9 @@ def _ideas(proposals, rows):
     return lines
 
 
-def _section_rows(items, annotations):
+def _section_rows(items, annotations, sections=MAIN_SECTIONS):
     seen = set()
-    for section in HEADINGS:
+    for section in sections:
         rows = items[section]
         if annotations is not None and section in {"china", "wiki"}:
             rows = [row for row in rows if row["id"] in annotations]
@@ -412,6 +446,12 @@ def _table_view(section, row):
     if section == "wiki":
         views = row["views"]
         return "-" if views is None else f"{views // 1000}K" if views >= 1000 else str(views)
+    if section in HOT_INDEX_SECTIONS:
+        volume = row.get("volume", "")
+        if not re.fullmatch(r"[0-9]{1,12}", volume):
+            return "-"
+        value = int(volume)
+        return f"{value / 1_000_000:.1f}M" if value >= 1_000_000 else f"{value // 1000}K" if value >= 1000 else str(value)
     return None
 
 
@@ -419,15 +459,26 @@ def _format_brief(items, snapshot, now, previous_keys, token_notice, annotations
     heading = _heading(now)
     opening = heading if annotations is not None else heading + "\n（AI 摘要今天不可用，点开看原文）"
     blocks = [(f"<b>{escape(heading)}</b>" + escape(opening[len(heading):]), opening)]
+    tables, details, history, shown = _render_sections(
+        items, annotations, previous_keys, MAIN_SECTIONS, HEADINGS)
+    if tables:
+        blocks.append(table_block(tables))
+    blocks.extend(quote_blocks("为什么热（点开看）", details))
+    return _finish_main(blocks, items, snapshot, history, shown, token_notice, annotations, ideas)
+
+
+def _render_sections(items, annotations, previous_keys, sections, headings):
     tables, details, history, shown = [], [], [], []
     labels_seen = set()
-    for section, rows in _section_rows(items, annotations):
+    for section, rows in _section_rows(items, annotations, sections):
         if not rows:
             continue
         metric_width = (max(6, *(table_width(_table_view(section, row)) for row in rows))
-                        if section == "malaysia" else 7)
+                        if section == "malaysia" else 5 if section in HOT_INDEX_SECTIONS else 7)
         section_header = (table_header("搜索量", metric_width=metric_width) if section == "malaysia" else
                           table_header("浏览", "条目") if section == "wiki" else
+                          table_header("热度", "名称") if section in HOT_INDEX_SECTIONS else
+                          table_header(title="名称 · 用途") if section == "cn_apps" else
                           table_header(title="用途", app=True) if section == "apps" else table_header())
         table = []
         for number, row in enumerate(rows, 1):
@@ -439,9 +490,14 @@ def _format_brief(items, snapshot, now, previous_keys, token_notice, annotations
             shown_title = label or title
             if section == "apps":
                 shown_title = label or why or row.get("genre") or row.get("developer") or "用途不明"
-            elif section == "music":
+            elif section in {"music", "cn_music"}:
                 # Song names stay original in the table; the AI's note goes in the details.
                 shown_title = f"{title} — {row['artist']}" if row.get("artist") else title
+            elif section == "cn_apps":
+                # Chinese app names would not survive the ASCII name column.
+                shown_title = f"{title} · {label or row.get('genre') or '用途不明'}"
+            elif section in HOT_INDEX_SECTIONS:
+                shown_title = title
             table.append(table_row(
                 number, _table_view(section, row), shown_title, metric_width=metric_width,
                 marker=previous_keys is not None and row["key"] not in previous_keys,
@@ -451,7 +507,8 @@ def _format_brief(items, snapshot, now, previous_keys, token_notice, annotations
             explanation = why or row.get("headline") or row.get("artist") or row.get("genre") or ""
             regions = row.get("also_searched_in") or row.get("countries") or ()
             details.append((
-                f"{HEADINGS[section].split()[0]} {number}. {title if section in {'music', 'apps'} else label or title}"
+                f"{headings[section].split()[0]} {number}. "
+                f"{title if section in {'music', 'apps', 'cn_music', 'cn_apps', *HOT_INDEX_SECTIONS} else label or title}"
                 + (f" · {explanation}" if explanation else "")
                 + (f"（{'、'.join(regions)}{'也在搜' if section == 'malaysia' else ''}）" if regions else ""),
                 row["link"],
@@ -461,12 +518,12 @@ def _format_brief(items, snapshot, now, previous_keys, token_notice, annotations
                 "title": title, "url": row["link"], "metric": row.get("views") if section == "wiki" else row.get("volume"),
                 "source": row.get("source_label"), "artist": row.get("artist"),
             })
-        tables.append((HEADINGS[section], section_header, table))
+        tables.append((headings[section], section_header, table))
         shown.extend(rows)
-    if tables:
-        blocks.append(table_block(tables))
-    blocks.extend(quote_blocks("为什么热（点开看）", details))
+    return tables, details, history, shown
 
+
+def _finish_main(blocks, items, snapshot, history, shown, token_notice, annotations, ideas):
     news = []
     used = {key for row in shown for key in _fingerprints(row)}
     final_news = _select_unique(items["news"], LIMITS["news"], used)
@@ -483,7 +540,8 @@ def _format_brief(items, snapshot, now, previous_keys, token_notice, annotations
         news.append(("天气数据暂不可用" if weather_unavailable else "今天没有天气警告", None))
     blocks.extend(quote_blocks("新闻和天气（点开看）", news))
     shown.extend(final_news + items["weather"])
-    tips = _ideas(ideas, shown)
+    # Ideas may cite China rows too, although those appear in the separate message.
+    tips = _ideas(ideas, shown + items.get("china", []))
     if tips:
         name = "💡 可能的生意线索（AI 推测，仅供参考）"
         body = "\n".join(f"• {tip}" for tip in tips)
@@ -494,6 +552,22 @@ def _format_brief(items, snapshot, now, previous_keys, token_notice, annotations
         footer += "\n以上由 AI 根据当天标题整理，可能有误，点 🔗 看原文"
     if token_notice:
         footer += f"\n{token_notice}"
+    blocks.append((escape(footer, quote=False), footer))
+    return blocks, history
+
+
+def _format_china(items, now, previous_keys, annotations=None):
+    tables, details, history, _shown = _render_sections(
+        items, annotations, previous_keys, tuple(CHINA_HEADINGS), CHINA_HEADINGS)
+    if not tables:
+        return [], history
+    local = instant(now).astimezone(MYT)
+    heading = f"🇨🇳 中国在流行 · {_date(now)}（周{'一二三四五六日'[local.weekday()]}）"
+    blocks = [(f"<b>{escape(heading)}</b>", heading), table_block(tables)]
+    blocks.extend(quote_blocks("原因和详情（点开看）", details))
+    footer = "数据来自微博热搜存档、百度热搜和热门榜、中新网、Apple 中国区榜单"
+    if annotations is not None:
+        footer += "\n热议标签由 AI 整理，可能有误，点 🔗 看原文"
     blocks.append((escape(footer, quote=False), footer))
     return blocks, history
 
@@ -511,13 +585,17 @@ def build_brief(snapshot, now, report_id, writer=None, *, previous_keys=None, to
                 blocks, entries = _format_brief(
                     items, snapshot, now, previous_keys, token_notice, annotations, ideas,
                 )
+                china, china_entries = _format_china(items, now, previous_keys, annotations)
                 parts = split_parts(blocks, label=report_id)
+                china_parts = split_parts(china, label=f"{report_id}-china") if china else []
                 meta.update(mode="ai", status="ok")
-                return Brief(parts, meta, entries)
+                return Brief(parts, meta, entries + china_entries, china_parts)
         except Exception:
             meta["status"] = "invalid_output"
     blocks, entries = _format_brief(items, snapshot, now, previous_keys, token_notice)
-    return Brief(split_parts(blocks, label=report_id), meta, entries)
+    china, china_entries = _format_china(items, now, previous_keys)
+    china_parts = split_parts(china, label=f"{report_id}-china") if china else []
+    return Brief(split_parts(blocks, label=report_id), meta, entries + china_entries, china_parts)
 
 
 TRANSIENT = {"http_429", "http_500", "http_502", "http_503", "http_504"}

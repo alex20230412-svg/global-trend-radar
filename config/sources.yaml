@@ -232,3 +232,38 @@ sources:
     url: "https://top.baidu.com/api/board?platform=wise&tab=realtime"
     enabled: true
     retention: long_term
+  - id: apple_music_cn
+    kind: chart
+    geo: CN
+    language: zh
+    url: "https://rss.marketingtools.apple.com/api/v2/cn/music/most-played/25/songs.json"
+    enabled: true
+    retention: long_term
+  - id: app_store_cn
+    kind: chart
+    geo: CN
+    language: zh
+    url: "https://rss.marketingtools.apple.com/api/v2/cn/apps/top-free/25/apps.json"
+    enabled: true
+    retention: long_term
+  - id: baidu_teleplay
+    kind: chart
+    geo: CN
+    language: zh
+    url: "https://top.baidu.com/api/board?platform=wise&tab=teleplay"
+    enabled: true
+    retention: long_term
+  - id: baidu_movie
+    kind: chart
+    geo: CN
+    language: zh
+    url: "https://top.baidu.com/api/board?platform=wise&tab=movie"
+    enabled: true
+    retention: long_term
+  - id: baidu_novel
+    kind: chart
+    geo: CN
+    language: zh
+    url: "https://top.baidu.com/api/board?platform=wise&tab=novel"
+    enabled: true
+    retention: long_term

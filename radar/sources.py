@@ -49,6 +49,9 @@ CHINA_NEWS_URL = "https://www.chinanews.com.cn/rss/scroll-news.xml"
 # Public board JSON, no login, cookie or signature; top.baidu.com/robots.txt is 404 (checked 2026-11-26).
 BAIDU_HOT_URL = "https://top.baidu.com/api/board?platform=wise&tab=realtime"
 BAIDU_SEARCH = "https://m.baidu.com/s?"
+# Same public board API, entertainment tabs (checked 2026-11-27; tab=game answers "no found page").
+BAIDU_BOARDS = {"baidu_teleplay": "teleplay", "baidu_movie": "movie", "baidu_novel": "novel"}
+BAIDU_BOARD_URL = "https://top.baidu.com/api/board?platform=wise&tab="
 EXTRA_SOURCE_LABELS = {
     "wikipedia_my": "维基百科", "weibo_archive": "微博", "chinanews_rss": "中新网", "baidu_hot": "百度",
 }
@@ -80,6 +83,10 @@ SITE_ENDPOINTS = {
     "weibo_archive": ("china", WEIBO_ARCHIVE_URL),
     "chinanews_rss": ("china", CHINA_NEWS_URL),
     "baidu_hot": ("china", BAIDU_HOT_URL),
+    # China popularity charts for the separate China message (Owner 2026-11-27).
+    "apple_music_cn": ("chart", "https://rss.marketingtools.apple.com/api/v2/cn/music/most-played/25/songs.json"),
+    "app_store_cn": ("chart", "https://rss.marketingtools.apple.com/api/v2/cn/apps/top-free/25/apps.json"),
+    **{source_id: ("chart", BAIDU_BOARD_URL + tab) for source_id, tab in BAIDU_BOARDS.items()},
 }
 CHART_LINK_HOSTS = {"music.apple.com", "apps.apple.com"}
 TRACKERS = {"fbclid", "gclid", "dclid", "msclkid", "igshid", "mc_cid", "mc_eid", "mkt_tok"}
@@ -651,7 +658,7 @@ def _weibo_archive(source, http, now):
     return rows
 
 
-def _baidu_hot(source, body):
+def _baidu_entries(body):
     payload = _object(_json(body))
     if payload.get("success") is not True:
         raise SourceError("json_schema")
@@ -665,6 +672,33 @@ def _baidu_hot(source, body):
             break
     if entries is None:
         raise SourceError("json_schema")
+    return entries
+
+
+def _baidu_board(source, body):
+    """A Baidu entertainment board: title, a short description and the hot-search index."""
+    def parse_item(position, raw):
+        entry = _item_object(raw)
+        title = entry.get("title") or entry.get("word")
+        if not isinstance(title, str) or not title.strip() or len(title) > 100:
+            raise MalformedItem("malformed_item")
+        index = entry.get("index")
+        rank = index if type(index) is int and 0 < index <= 100 else position
+        desc = entry.get("desc")
+        parts = [part for part in desc if isinstance(part, str)] if isinstance(desc, list) else (
+            [desc] if isinstance(desc, str) else [])
+        score = entry.get("hotScore")
+        value = score.get("value") if isinstance(score, dict) else None
+        volume = value if isinstance(value, str) and re.fullmatch(r"[0-9]{1,12}", value) else None
+        return _observation(source, title, BAIDU_SEARCH + urlencode({"word": title.strip()}), rank,
+                            volume_raw=volume) | {"artist": _title(" · ".join(parts), 120) or None, "genre": None}
+
+    rows = _item_rows(_baidu_entries(body)[:30], parse_item)
+    return SourceItems(sorted(rows, key=lambda row: row["rank"]), skipped=rows.skipped)
+
+
+def _baidu_hot(source, body):
+    entries = _baidu_entries(body)
 
     def parse_item(position, raw):
         entry = _item_object(raw)
@@ -709,6 +743,8 @@ def collect_source(source, http=None):
         rows = _weibo_archive(source, http, datetime.now(UTC))
     elif source.id == "baidu_hot":
         rows = _baidu_hot(source, http.load(source.url))
+    elif source.id in BAIDU_BOARDS:
+        rows = _baidu_board(source, http.load(source.url))
     else:
         body = http.load(source.url)
         if source.kind == "hn":

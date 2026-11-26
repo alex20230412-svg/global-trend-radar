@@ -348,3 +348,27 @@ class RedirectDetailTests(TestCase):
             label = redirect_detail(target, location)
             self.assertEqual(expected, label)
             self.assertIsNotNone(DETAIL.fullmatch(label))
+
+
+class BaiduBoardTests(TestCase):
+    def test_board_rows_keep_title_description_and_hot_index(self):
+        source = SOURCE["baidu_teleplay"]
+        body = json.dumps({"success": True, "data": {"cards": [{"content": [{"content": [
+            {"index": 2, "title": "合成剧乙", "desc": ["中国大陆 | 古装", "演员：合成演员"],
+             "hotScore": {"value": "93247"}, "url": "https://example.org/not-used"},
+            {"index": 1, "title": "合成剧甲", "desc": "合成说明", "hotScore": {"value": "95471"}},
+            {"index": 3, "title": "", "hotScore": {"value": "1"}},
+        ]}]}]}}).encode()
+        rows = sources._baidu_board(source, body)
+        self.assertEqual(["合成剧甲", "合成剧乙"], [row["title"] for row in rows])
+        self.assertEqual(["95471", "93247"], [row["volume_raw"] for row in rows])
+        self.assertEqual("中国大陆 | 古装 · 演员：合成演员", rows[1]["artist"])
+        self.assertTrue(all(row["url"].startswith("https://m.baidu.com/s?word=") for row in rows))
+        self.assertEqual(1, rows.skipped)
+
+    def test_china_chart_sources_are_registered(self):
+        for source_id, tab in sources.BAIDU_BOARDS.items():
+            self.assertEqual(("chart", sources.BAIDU_BOARD_URL + tab), sources.SITE_ENDPOINTS[source_id])
+            self.assertEqual("CN", SOURCE[source_id].geo)
+        for source_id in ("apple_music_cn", "app_store_cn"):
+            self.assertIn("/api/v2/cn/", sources.SITE_ENDPOINTS[source_id][1])

@@ -23,7 +23,8 @@ MYT = timezone(timedelta(hours=8), "MYT")
 PROMPT_VERSION = "brief-v1"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 GEMINI_MODELS = ("gemini-flash-lite-latest", "gemini-flash-latest")
-GEMINI_KEY = re.compile(r"[A-Za-z0-9_-]{20,200}")
+# Visible ASCII only (no spaces or line breaks that could reach a header); Google key formats vary.
+GEMINI_KEY = re.compile(r"[\x21-\x7e]{20,512}")
 MAX_BRIEF_CHARS = 3400
 COUNTRIES = {
     "MY": "马来西亚", "SG": "新加坡", "ID": "印尼", "TH": "泰国", "PH": "菲律宾", "VN": "越南",
@@ -279,10 +280,21 @@ def build_brief(snapshot, now, report_id, writer=None):
     return Brief(split_parts(plain_blocks(items, snapshot, now), label=report_id), meta)
 
 
+class UnavailableWriter:
+    """Stands in for the model when no usable key is configured, so the archive says why."""
+
+    def __init__(self, reason):
+        self.reason = reason
+
+    def write(self, system, prompt):
+        return None, self.reason, None
+
+
 class GeminiWriter:
     """Minimal Gemini generateContent client. Errors are reported as fixed status codes only."""
 
     def __init__(self, key, *, transport=None, models=GEMINI_MODELS, timeout=90.0):
+        key = key.strip() if isinstance(key, str) else key
         if not isinstance(key, str) or not GEMINI_KEY.fullmatch(key):
             raise ValueError("invalid_gemini_key")
         self._key = key

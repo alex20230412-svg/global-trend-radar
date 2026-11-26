@@ -34,3 +34,15 @@
 - 24 个启用接口每轮约 54 次数据请求，加各域 robots 与受限重试。GDELT 的两次查询属于隔离探针。固定来源、禁重定向。401/403 停止，429 按 `Retry-After` 或更严格的站点规则退避。
 - 华文新增当今大马一个出版社。其余候选的官方 RSS、访问或使用条件仍有缺口。商品趋势代表现有来源信号，尚无销量。TikTok、Facebook、Instagram、Threads、X、YouTube 和 Wikipedia 本轮未接入。 [华文来源调查](chinese-sources.md)
 - 默认分支确有 Actions 实跑与 L1–L3 证据时，逐源更新证据等级。合成样本与本轮静态调查只用于离线验收和来源筛选。 [历史方案](PLAN.md)
+
+## 实测记录（无凭证 live-check，main，GitHub Actions ubuntu-24.04）
+
+| 日期 | 运行 | 结果 |
+| --- | --- | --- |
+| 2026-11-26 | [45745818302](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45745818302) | 21/24。`malaysiakini`、`malaysiakini_zh`、`weather` 为 `http_301`（RSS 与 API 地址变更，PR #11 修正）；GDELT `network_error` |
+| 2026-11-26 | [45746194730](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45746194730) | 23/24。`malaysiakini` 一次 `invalid_xml`（偶发，浏览器同时可正常解析） |
+| 2026-11-26 | [45746616949](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45746616949) | 23/24。`bernama` 一次 `ConnectTimeout`（PR #13 连接超时放宽到 8 秒） |
+| 2026-11-26 | [45746864621](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45746864621) | **24/24**，两次采集幂等，日报 1 段 3,473 字，未降级 |
+| 2026-11-26 | [45746980188](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45746980188) | **24/24**，日报 1 段 3,491 字，未降级 |
+
+GDELT 在全部 5 次运行中都连不上（诊断为 `ConnectTimeout`，8 秒连接超时也一样），判断为不接受 GitHub runner 的连接，保持 `enabled: false`。私库写入和 Telegram 投递待 Owner 完成凭证设置后实测。

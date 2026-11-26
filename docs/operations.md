@@ -14,19 +14,22 @@
 
 ## 二、全项实测通过后，Owner 一次配置
 
-Claude 经 Owner 同意创建或配置公开代码仓库的 `radar-live` environment，只允许 `main` 部署。Claude 先确认项目专用数据仓库为 Private，具有默认 `main` 且 Actions 已关闭。 [Environment 设置](https://github.com/alex20230412-svg/global-trend-radar/settings/environments) · [私库 Actions 设置](https://github.com/alex20230412-svg/global-trend-radar-data/settings/actions)
+2026-11-26 无凭证实测已通过（见 [来源证据表](sources.md) 的实测记录）。会话代理禁止 AI 读写仓库的 environment、variables、secrets 和 Actions 权限设置，所以下面全部由 Owner 在浏览器或手机完成。私库已由 Claude 确认为 Private、默认分支 `main`。
 
-| Owner 操作 | 凭证范围 |
+| 步骤 | Owner 操作 |
 | --- | --- |
-| 在官方 BotFather 发送 `/newbot` 创建项目专用 Bot。 | 把新 Token 直接填到 `radar-live` 的 `TELEGRAM_BOT_TOKEN`。 |
-| 创建限期 fine-grained PAT | **Only select repositories**，只选 `global-trend-radar-data`。权限仅增加 **Contents: Read and write**，保留 GitHub 默认 Metadata read。把 PAT 直接填到同一 environment 的 `DATA_REPO_TOKEN`。 |
-| 在自己与新 Bot 的私人对话里发送一次 `/start` | 发送后告知 Claude，供接下来的 15 分钟绑定窗口使用。Chat ID 由程序保存在专用私库。 |
+| 1 | Telegram 打开 [@BotFather](https://t.me/BotFather) → `/newbot` → 取名 → 用户名以 `bot` 结尾 → 复制 BotFather 给的 Token。 |
+| 2 | [新建 fine-grained PAT](https://github.com/settings/personal-access-tokens/new)：名称随意，期限选最长（1 年），**Repository access → Only select repositories → `global-trend-radar-data`**，**Repository permissions → Contents → Read and write**，生成后复制。 |
+| 3 | [Environments](https://github.com/alex20230412-svg/global-trend-radar/settings/environments) → **New environment** 名称 `radar-live` → **Deployment branches and tags → Selected branches and tags → Add rule → `main`** → **Add environment secret** 两个：`TELEGRAM_BOT_TOKEN`（第 1 步的 Token）、`DATA_REPO_TOKEN`（第 2 步的 PAT）。 |
+| 4 | [Actions variables](https://github.com/alex20230412-svg/global-trend-radar/settings/variables/actions) → **New repository variable**：`RADAR_STAGE` = `b-manual`。 |
+| 5 | [私库 Actions 设置](https://github.com/alex20230412-svg/global-trend-radar-data/settings/actions) → **Disable actions** → Save。 |
+| 6 | 最后在 Telegram 打开新 Bot 的私聊，按 **Start**（发送 `/start`），然后马上告诉 Claude「好了」。绑定窗口为 15 分钟。 |
 
-凭证只填 GitHub Environment。 [BotFather](https://t.me/BotFather) · [创建 fine-grained PAT](https://github.com/settings/personal-access-tokens/new) · [Environment 设置](https://github.com/alex20230412-svg/global-trend-radar/settings/environments)
+Token 和 PAT 只填在 GitHub 页面里，**不要贴到任何对话**。
 
 ## 三、Claude 验证真实私聊与私库
 
-1. 经 Owner 同意设置 `RADAR_STAGE=b-manual`。来源默认由审核后的 `enabled: true` 与 `retention: long_term` 控制。`RADAR_APPROVED_SOURCES` 只用于缩小范围，通常留空。执行受审 `main` 的 **Radar collect**，并依测试顺序核对同槽重跑与不同时槽的真实观测。 [Radar collect](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/collect.yml)
+1. Owner 设好 `RADAR_STAGE=b-manual` 后，来源默认由审核后的 `enabled: true` 与 `retention: long_term` 控制。`RADAR_APPROVED_SOURCES` 只用于缩小范围，通常留空。执行受审 `main` 的 **Radar collect**，并依测试顺序核对同槽重跑与不同时槽的真实观测。 [Radar collect](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/collect.yml)
 2. 通过 Owner 授权且由 GitHub 识别为仓库 Owner 的会话发起 `bind_chat`。Owner 在自己的 Bot 私聊看到通用确认后告知 Claude，再用同一身份在 30 分钟内发起 `confirm_bind`。只有 `BOUND` 才可继续。若无法以 Owner 身份操作，相应绑定动作交由 Owner 点击。绑定存在多个候选或收件人不明时暂停核对。 [Radar report](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/report.yml)
 3. 发起 `report send`，由 Owner 确认收到私聊。经单独授权的临时只读访问核对专用私库的观测、校验和、来源状态和投递回执，再撤去只读访问。用同日重跑确认已发送段数不增加。公开报告只记录数量和状态。
 

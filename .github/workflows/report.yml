@@ -10,6 +10,7 @@ on:
         options:
           - send
           - preview
+          - weekly-preview
           - resume
           - confirm_received
           - confirm_unsent
@@ -24,6 +25,7 @@ on:
   # Stage C (Owner approved 2026-11-26, Issue #16). Runs only while RADAR_STAGE is c-scheduled.
   schedule:
     - cron: '30 0 * * *'
+    - cron: '0 1 * * 0'
 
 permissions:
   contents: read
@@ -70,6 +72,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           RADAR_REPORT_ACTION: ${{ inputs.action }}
+          RADAR_REPORT_SCHEDULE: ${{ github.event.schedule }}
           RADAR_REPORT_ID: ${{ inputs.report_id }}
           RADAR_PART_NO: ${{ inputs.part_no }}
         run: python -m radar.live report

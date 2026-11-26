@@ -108,7 +108,8 @@ class BriefTests(unittest.TestCase):
         payload = json.loads(_prompt_payload(items, NOW))
         self.assertEqual("11月27日", payload["date"])
         self.assertEqual("m1", payload["malaysia"][0]["id"])
-        self.assertIn("新加坡", payload["malaysia"][0]["also_searched_in"])
+        self.assertIn("新加坡", items["malaysia"][0]["also_searched_in"])
+        self.assertNotIn("also_searched_in", payload["malaysia"][0])  # regions are added by code only
         self.assertNotIn("http", json.dumps(payload, ensure_ascii=False))
         self.assertLessEqual(len(items["malaysia"]), 8)
         self.assertLessEqual(len(items["other"]), 4)

@@ -84,7 +84,7 @@ def collect_plan(created_at, scheduled):
     return hour(created_at), None
 
 
-SCHEDULE_START_KEY = "schedule/start.json"
+SCHEDULE_START_KEY = "health/schedule-start.json"
 
 
 def _schedule_start(store, env, operation, created):

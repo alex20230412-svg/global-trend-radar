@@ -28,6 +28,8 @@ WEIBO_ARCHIVE_PATH = "/repos/justjavac/weibo-trending-hot-search/contents/raw"
 WEIBO_ARCHIVE_FILE = re.compile(re.escape(WEIBO_ARCHIVE_PATH) + r"/[0-9]{4}-[0-9]{2}-[0-9]{2}\.json")
 SINGLE_READ_ORIGINS = {GITHUB_ARCHIVE_HOST, "wikimedia.org", "www.chinanews.com.cn", "top.baidu.com"}
 ARCHIVE_TOKEN = re.compile(r"[!-~]{20,512}")
+# Hosts whose robots.txt may be fetched only because the origin redirected robots.txt there.
+ROBOTS_WWW_HOSTS = frozenset({"www.wikimedia.org"})
 DETAIL = re.compile(r"[A-Z][A-Za-z0-9_]{0,39}(?::[0-9]{1,7}:[0-9]{1,7})?")
 HOSTS = frozenset({
     "trends.google.com",
@@ -145,9 +147,12 @@ class SourceHttp:
             try:
                 robots = self._request(robots_url, gate, interval)
             except SourceError as error:
-                if error.code not in {"http_404", "http_410"}:
+                if error.code in {"http_404", "http_410"}:
+                    robots = b""
+                elif getattr(error, "detail", None) == "RedirectRobotsWww" and f"www.{target.host}" in ROBOTS_WWW_HOSTS:
+                    robots = self._www_robots(robots_url, gate, interval)
+                else:
                     raise
-                robots = b""
             if robots.lstrip().startswith(b"<"):
                 raise SourceError("robots_invalid")
             try:
@@ -166,6 +171,19 @@ class SourceHttp:
         if wait > RETRY_SECONDS or robots.visit_time(USER_AGENT) is not None:
             raise SourceError("robots_rate_unsupported")
         return self._request(target, gate, wait)
+
+    def _www_robots(self, robots_url, gate, interval):
+        # RFC 9309 says crawlers should follow robots.txt redirects; wikimedia.org sends it to www.
+        # The rules found there (or none, on 404) apply to the original host.
+        www = robots_url.copy_with(host=f"www.{robots_url.host}")
+        if www.host not in self.addresses:
+            self.addresses[www.host] = self.resolve(www.host)
+        try:
+            return self._request(www, gate, interval)
+        except SourceError as error:
+            if error.code in {"http_404", "http_410"}:
+                return b""
+            raise
 
     def _request(self, target, gate, interval):
         for attempt in range(2):

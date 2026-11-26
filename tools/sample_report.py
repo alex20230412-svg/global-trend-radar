@@ -8,6 +8,7 @@ from radar.layout import entry_key
 from radar.report import build_report
 from radar.sources import load_sources
 from radar.youtube import YouTubeVideo, render_youtube
+from tools.sample_weekly import print_sample_weekly
 
 
 NOW = datetime(2026, 11, 27, 0, 37, tzinfo=UTC)
@@ -90,6 +91,10 @@ def synthetic_report():
         observe("app_store_my", "chart", title, rank=rank, genre=genre,
                 url=f"https://apps.apple.com/my/app/synthetic-{rank}")
 
+    observe("wikipedia_my", "wiki", "示例词条：青羽量角器", views_ceil=12000)
+    observe("weibo_archive", "china", "示例展览开放夜间预约", geo="CN")
+    observe("chinanews_rss", "china", "示例湿地开放候鸟观察步道", geo="CN")
+
     for rank, (title, hours) in enumerate((
         ("示例区域 A · 雷暴警告", 2),
         ("示例区域 B · 海岸大风警告", 6),
@@ -150,6 +155,8 @@ def main():
     youtube_plain = _message_text(youtube)
     print(f"\n合成 YouTube 消息 · 1 段 · {_units(youtube_plain)} UTF-16 单元")
     print(youtube_plain)
+    print()
+    print_sample_weekly()
 
 
 if __name__ == "__main__":

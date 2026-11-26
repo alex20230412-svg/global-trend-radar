@@ -8,7 +8,7 @@ import httpx
 
 from radar import live
 from radar.brief import (
-    GeminiWriter, _prompt_payload, build_brief, collect_items, sanitize,
+    GeminiWriter, _footer, _prompt_payload, build_brief, collect_items, sanitize,
 )
 from radar.delivery import _message_text
 from radar.layout import entry_key, table_width
@@ -48,6 +48,17 @@ class BriefTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.snapshot = synthetic_report().snapshot
+
+    def test_footer_names_stale_archive_and_wiki_fallback_date(self):
+        text = _footer({"coverage": [
+            {"source_id": "weibo_archive", "status": "stale", "reason": "archive_stale"},
+            {"source_id": "wikipedia_my", "status": "ok", "data_day": "2026-11-25", "fallback": True},
+            {"source_id": "chinanews_rss", "status": "error"},
+        ]})
+        self.assertIn("1/3 个正常", text)
+        self.assertIn("微博存档已停更", text)
+        self.assertIn("中新网", text)
+        self.assertIn("维基百科采用 2026-11-25 的马来西亚浏览榜", text)
 
     def test_plain_brief_is_chinese_one_part_without_niche_platforms(self):
         brief = build_brief(self.snapshot, NOW, "daily-2026-11-27")
@@ -172,6 +183,8 @@ class BriefTests(unittest.TestCase):
                           entry_key("合成流行曲", section="music", artist="合成歌手")],
                          [row["key"] for row in brief.entries])
         self.assertEqual(["malaysia", "music"], [row["section"] for row in brief.entries])
+        first_week = build_brief(snapshot, NOW, "daily-2026-11-27", previous_keys=None)
+        self.assertEqual(0, _message_text(first_week.parts[0]).count("🆕"))
 
     def test_json_discards_invented_numbers_long_labels_and_extra_item_ids(self):
         snapshot = {"malaysia": [

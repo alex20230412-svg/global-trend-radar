@@ -42,6 +42,7 @@ SOURCE_NAMES = {
     "fmt": "Free Malaysia Today", "bernama": "马新社", "hn": "Hacker News", "bluesky": "Bluesky",
     "mastodon_tags": "Mastodon 标签", "mastodon_links": "Mastodon 链接", "weather": "大马气象局",
     "gdelt": "GDELT", "apple_music_my": "Apple Music 榜", "app_store_my": "App Store 榜",
+    "wikipedia_my": "马来西亚维基百科", "weibo_archive": "微博存档", "chinanews_rss": "中新网",
 }
 SYSTEM_PROMPT = """你为马来西亚华人编辑中文热点早报。只返回 JSON 对象 items 和 ideas。
 items 的每行包含原样 id、label、why。label 是最多 8 个中文字的主题，why 是一句简体中文原因。
@@ -125,6 +126,7 @@ HEADINGS = {
     "apps": "📱 大家在下载",
 }
 ARCHIVE_SECTIONS = {"other": "global"}
+SHORT_LABELS = {"中新网": "中新"}
 HIDDEN_KEYS = {"link", "original_url", "also_searched_in", "countries", "volume", "views", "key"}
 
 
@@ -273,6 +275,12 @@ def _footer(snapshot):
     line = f"ℹ️ 数据来源 {len(good)}/{len(active)} 个正常"
     if problems:
         line += "；暂时没有数据：" + "、".join(problems[:6]) + ("等" if len(problems) > 6 else "")
+    for source in good:
+        day = source.get("data_day")
+        if (source.get("source_id") == "wikipedia_my" and source.get("fallback")
+                and isinstance(day, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", day)):
+            line += f"\n维基百科采用 {day} 的马来西亚浏览榜"
+            break
     return line
 
 
@@ -379,7 +387,7 @@ def _format_brief(items, snapshot, now, previous_keys, token_notice, annotations
     for section, rows in _section_rows(items, annotations):
         if not rows:
             continue
-        metric_width = (max(7, *(table_width(_table_view(section, row)) for row in rows))
+        metric_width = (max(6, *(table_width(_table_view(section, row)) for row in rows))
                         if section == "malaysia" else 7)
         section_header = (table_header("搜索量", metric_width=metric_width) if section == "malaysia" else
                           table_header("浏览", "条目") if section == "wiki" else
@@ -396,9 +404,9 @@ def _format_brief(items, snapshot, now, previous_keys, token_notice, annotations
                 shown_title = why or row.get("genre") or row.get("developer") or "用途不明"
             table.append(table_row(
                 number, _table_view(section, row), shown_title, metric_width=metric_width,
-                marker=row["key"] not in previous_keys,
+                marker=previous_keys is not None and row["key"] not in previous_keys,
                 app_name=title if section == "apps" else None,
-                suffix=f"（{row['source_label']}）" if section == "china" else "",
+                suffix=f"（{SHORT_LABELS.get(row['source_label'], row['source_label'])}）" if section == "china" else "",
             ))
             explanation = why or row.get("headline") or row.get("artist") or row.get("genre") or ""
             regions = row.get("also_searched_in") or row.get("countries") or ()
@@ -449,7 +457,7 @@ def _format_brief(items, snapshot, now, previous_keys, token_notice, annotations
     return blocks, history
 
 
-def build_brief(snapshot, now, report_id, writer=None, *, previous_keys=(), token_notice=None):
+def build_brief(snapshot, now, report_id, writer=None, *, previous_keys=None, token_notice=None):
     """Build a Telegram brief from source rows and optional validated annotations."""
     items = collect_items(snapshot)
     meta = {"prompt_version": PROMPT_VERSION, "mode": "plain", "status": "no_writer", "model": None}

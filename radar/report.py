@@ -12,7 +12,7 @@ import math
 from typing import NamedTuple
 import unicodedata
 from .scoring import instant, load_scoring, rank_observations, trend_key
-from .sources import clean_url
+from .sources import EXTRA_SOURCE_LABELS, clean_url
 
 
 MYT = timezone(timedelta(hours=8), "MYT")
@@ -24,6 +24,7 @@ SOURCE_NAMES = {
     "malay_mail": "Malay Mail",
     "fmt": "Free Malaysia Today",
     "bernama": "Bernama",
+    **EXTRA_SOURCE_LABELS,
 }
 KIND_NAMES = {
     "hn": "Hacker News", "bluesky": "Bluesky", "mastodon": "Mastodon",

@@ -55,6 +55,14 @@ Owner 收到的是中文早报（`radar/brief.py`）：有 `GEMINI_API_KEY` 时�
 
 首 24 小时核对至少 20 个有有效核心数据并持久化的计划槽，完整、部分、失败和漏跑各自列出。连续三天查收日报并记录实际延时。第七天复核来源稳定性、真实覆盖、重复投递、容量及费用。GitHub 公开仓库长期无活动可能停用定时任务。平台整体停摆时，同仓库的告警也无法运行。 [定时触发行为](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule) · [并发队列](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
 
+### 周日热点周报
+
+每周日 09:00 MYT 使用 `report.yml` 的 `0 1 * * 0`，仅在 `RADAR_STAGE=c-scheduled` 运行。正式编号使用 ISO 周，例如 `weekly-2026-W48`。统计区间是 MYT 的周一至周日，若周日早报已送达也会纳入。每项按出现天数排序，同天数按日报出现位置判序。首次部署缺少 v5 的报告记录时会显示覆盖天数，等日常报告积累后才完整。
+
+审核合并后，在 **Radar report → Run workflow → main** 选 `weekly-preview`，可以发送本周截至当天的独立预览。预览编号为 `weekly-preview-HHMM-YYYY-MM-DD`，方便同一天区分日报与周报。手动预览可用于 `b-manual` 或 `c-scheduled` 阶段。核对表格、可折叠详情、覆盖天数和私聊后，由 Owner 确认。 [Radar report](https://github.com/alex20230412-svg/global-trend-radar/actions/workflows/report.yml)
+
+周报沿用投递台账和 `resume`、`confirm_received`、`confirm_unsent`。相同编号续发时使用已归档的报告；YouTube 独立补充仅用于日报。Gemini 可用时，生意线索以实际纳入的条目为依据，显示为 AI 推测。
+
 ## 暂停、恢复和清理
 
 - 删除或清空 `RADAR_STAGE` 可跳过后续真实作业。需要立即停机时停用这两个工作流，检查仍在运行的作业及私有流水。中断一个在途发送会留下待确认状态。

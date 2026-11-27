@@ -10,7 +10,7 @@
   - 早报为 AI 模式（`gemini-flash-latest`，brief-v5.4），33/34 来源正常，缺马新社。
 - 定时采集：从 23:54 MYT 开启阶段 C 到 09:00 MYT，只触发过一次（22:58 UTC，对应 22:17 时段，晚了 41 分钟），成功。`health/schedule-start.json` 已记录 `schedule_from = 2026-11-26T22:17:00Z`。
 - 已做：跑 keepalive 重新启用工作流；加后备定时（#50）。
-- 等 Owner 选：继续观察，或者在 Claude 账号上设每天早上的定时任务来派发工作流（需要 Owner 同意）。
+- **已解决（D-016）：** Owner 选「2」。10:15 MYT 已在 Owner 的 Claude 账号上建立定时任务「Global Trend Radar 每日早报」：每天 08:40 MYT 派发采集和发送，周日另外派发周报。第一次运行在 2026-11-28 08:40 MYT。GitHub 自己的定时保留作保底。
 
 ## 🇨🇳 中国在流行 · 已上线（2026-11-27 00:15 MYT）
 

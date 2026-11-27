@@ -2,15 +2,15 @@
 
 最后更新 2026-11-27 00:15 MYT，Claude。
 
-## ⚠️ GitHub 定时没有触发（2026-11-27 02:50 MYT）
+## ⚠️ GitHub 定时不可靠（2026-11-27 09:05 MYT）
 
-- Owner 在 23:54 MYT 把 `RADAR_STAGE` 改为 `c-scheduled`。到 02:50 MYT 为止，GitHub 一次都没有启动定时采集：14:17–18:17 UTC 共 5 个时段，连 skipped 记录也没有。上一次定时运行是 13:53 UTC，当时阶段还是 b-manual，所以被跳过。
-- 所以 `health/schedule-start.json` 还没有生成。数据目前来自 00:08 MYT 的手动采集。
-- 已做：
-  - 01:47 MYT 跑 keepalive，重新启用三个工作流（[45870612981](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45870612981)）。
-  - 加后备定时（#50）：日报 08:50、周报周日 09:20。送达过的报告编号不会重发。
-  - c-scheduled 阶段下，手动派发 `send` 产生的是正式的 `daily-YYYY-MM-DD`，08:30 之后可以手动补发。
-- 下一步：08:56 MYT 检查日报。如果没发，手动补一次采集和发送；长期备援要先问 Owner（选项见 HANDOFF）。
+- 第一份正式日报 `daily-2026-11-27` 已送达，但不是由定时自动发出的：08:30 和 08:50 两个报告定时都没有触发。
+  - Claude 在 08:56 MYT 手动派发：先采集（[45919709677](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45919709677)，partial，508 条），再发送（[45919808154](https://github.com/alex20230412-svg/global-trend-radar/actions/runs/45919808154)）。
+  - 结果：`report delivery=SENT`，`china status=ok sent=SENT`，`youtube status=ok items=18 sent=SENT`。
+  - 早报为 AI 模式（`gemini-flash-latest`，brief-v5.4），33/34 来源正常，缺马新社。
+- 定时采集：从 23:54 MYT 开启阶段 C 到 09:00 MYT，只触发过一次（22:58 UTC，对应 22:17 时段，晚了 41 分钟），成功。`health/schedule-start.json` 已记录 `schedule_from = 2026-11-26T22:17:00Z`。
+- 已做：跑 keepalive 重新启用工作流；加后备定时（#50）。
+- 等 Owner 选：继续观察，或者在 Claude 账号上设每天早上的定时任务来派发工作流（需要 Owner 同意）。
 
 ## 🇨🇳 中国在流行 · 已上线（2026-11-27 00:15 MYT）
 

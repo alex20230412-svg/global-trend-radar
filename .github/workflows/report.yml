@@ -11,6 +11,7 @@ on:
           - send
           - preview
           - weekly-preview
+          - weekly
           - resume
           - confirm_received
           - confirm_unsent

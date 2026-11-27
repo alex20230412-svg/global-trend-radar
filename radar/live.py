@@ -263,7 +263,9 @@ def _report(store, sources, approved, env, execution, created, now, schedule_fro
         if scheduled_action is None or (action and action != scheduled_action):
             raise StorageError("report_operation_invalid")
         action = scheduled_action
-    elif action == "weekly" or (action == "weekly-preview" and event != "workflow_dispatch"):
+    elif action in {"weekly", "weekly-preview"} and event != "workflow_dispatch":
+        # A dispatched formal weekly is allowed so the Owner-approved daily task can start it when
+        # GitHub drops the Sunday schedule; stage C, Sunday and 09:00 are still checked below.
         raise StorageError("report_operation_invalid")
     action = action or "send"
     notice = _token_notice(env, now) if action in {"send", "preview", "resume"} else None

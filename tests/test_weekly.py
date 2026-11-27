@@ -209,8 +209,9 @@ class WeeklyRoutingTests(unittest.TestCase):
 
     def test_formal_weekly_requires_sunday_schedule_and_stage_c(self):
         for options in (
-            {"GITHUB_EVENT_NAME": "workflow_dispatch"}, {"RADAR_STAGE": "b-manual"},
+            {"GITHUB_EVENT_NAME": "workflow_dispatch", "RADAR_STAGE": "b-manual"}, {"RADAR_STAGE": "b-manual"},
             {"RADAR_REPORT_SCHEDULE": "30 0 * * *"}, {"RADAR_REPORT_SCHEDULE": "0 1 * * 1"},
+            {"GITHUB_EVENT_NAME": "push"},
         ):
             with self.subTest(options=options), self.assertRaisesRegex(StorageError, "report_operation_invalid"):
                 self._report(action="weekly", env=options)
@@ -218,6 +219,13 @@ class WeeklyRoutingTests(unittest.TestCase):
             self._report(now=SUNDAY - timedelta(minutes=1))
         self.assertEqual(1, self._report(now=SUNDAY + timedelta(days=1)))
         self.assertEqual([], self.calls)
+
+    def test_dispatched_weekly_in_stage_c_still_needs_sunday_and_nine(self):
+        dispatch = {"GITHUB_EVENT_NAME": "workflow_dispatch", "RADAR_REPORT_SCHEDULE": ""}
+        with self.assertRaisesRegex(StorageError, "report_before_target"):
+            self._report(action="weekly", env=dispatch, now=SUNDAY - timedelta(minutes=1))
+        self.assertEqual(1, self._report(action="weekly", env=dispatch,
+                                         now=SUNDAY + timedelta(days=1), created=SUNDAY + timedelta(days=1)))
 
     def test_backup_crons_map_to_the_same_actions(self):
         from radar import live
@@ -234,7 +242,7 @@ class WeeklyRoutingTests(unittest.TestCase):
         self.assertIn({"cron": WEEKLY_CRON}, triggers["schedule"])
         choices = triggers["workflow_dispatch"]["inputs"]["action"]["options"]
         self.assertIn("weekly-preview", choices)
-        self.assertNotIn("weekly", choices)
+        self.assertIn("weekly", choices)  # Dispatched by the daily task when GitHub drops the schedule.
         job = workflow["jobs"]["report"]
         self.assertIn("github.event_name == 'schedule' && vars.RADAR_STAGE == 'c-scheduled'", job["if"])
         runtime = job["steps"][-1]
